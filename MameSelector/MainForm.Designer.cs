@@ -39,7 +39,6 @@ partial class MainForm
         toolStripSeparator5 = new ToolStripSeparator();
         exitToolStripMenuItem = new ToolStripMenuItem();
         helpToolStripMenuItem = new ToolStripMenuItem();
-        testXmlParsingToolStripMenuItem = new ToolStripMenuItem();
         aboutToolStripMenuItem = new ToolStripMenuItem();
         copyRomsButton = new Button();
         statusStrip = new StatusStrip();
@@ -150,18 +149,11 @@ partial class MainForm
         // 
         // helpToolStripMenuItem
         // 
-        helpToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { testXmlParsingToolStripMenuItem, aboutToolStripMenuItem });
+        helpToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { aboutToolStripMenuItem });
         helpToolStripMenuItem.Name = "helpToolStripMenuItem";
         helpToolStripMenuItem.Size = new Size(44, 20);
         helpToolStripMenuItem.Text = "&Help";
 
-        // 
-        // testXmlParsingToolStripMenuItem
-        // 
-        testXmlParsingToolStripMenuItem.Name = "testXmlParsingToolStripMenuItem";
-        testXmlParsingToolStripMenuItem.Size = new Size(160, 22);
-        testXmlParsingToolStripMenuItem.Text = "&Test XML Parsing";
-        testXmlParsingToolStripMenuItem.Click += TestXmlParsingToolStripMenuItem_Click;
 
         // 
         // aboutToolStripMenuItem
@@ -512,7 +504,6 @@ partial class MainForm
     private ToolStripSeparator toolStripSeparator5;
     private ToolStripMenuItem exitToolStripMenuItem;
     private ToolStripMenuItem helpToolStripMenuItem;
-    private ToolStripMenuItem testXmlParsingToolStripMenuItem;
     private ToolStripMenuItem aboutToolStripMenuItem;
     private Button scanRomsButton;
     private Button copyRomsButton;

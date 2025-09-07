@@ -52,7 +52,6 @@ public class RomCacheService
         catch (Exception ex)
         {
             // Log error but don't throw - caching is optional
-            System.Diagnostics.Debug.WriteLine($"Failed to save ROM cache: {ex.Message}");
         }
     }
 
@@ -81,7 +80,6 @@ public class RomCacheService
             var validationResult = await ValidateCacheAsync(cacheData, settings);
             if (!validationResult.IsValid)
             {
-                System.Diagnostics.Debug.WriteLine($"ROM cache invalid: {validationResult.Reason}");
                 return null;
             }
 
@@ -127,7 +125,6 @@ public class RomCacheService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to load ROM cache: {ex.Message}");
             return null;
         }
     }
@@ -184,7 +181,6 @@ public class RomCacheService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to clear ROM cache: {ex.Message}");
             return Task.CompletedTask;
         }
     }

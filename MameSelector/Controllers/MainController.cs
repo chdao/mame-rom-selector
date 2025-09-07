@@ -206,18 +206,15 @@ public class MainController
     /// </summary>
     public async Task ScanAndLoadRomsAsync(IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {
-        Console.WriteLine("CONTROLLER DEBUG: Starting ScanAndLoadRomsAsync...");
         
         if (_isLoading)
         {
-            Console.WriteLine("CONTROLLER DEBUG: Already loading, returning");
             return;
         }
 
         var validationErrors = _settings.Validate();
         if (validationErrors.Any())
         {
-            Console.WriteLine($"CONTROLLER DEBUG: Validation errors: {string.Join(", ", validationErrors)}");
             throw new InvalidOperationException($"Configuration errors: {string.Join(", ", validationErrors)}");
         }
 
@@ -225,7 +222,6 @@ public class MainController
 
         try
         {
-            Console.WriteLine("CONTROLLER DEBUG: Clearing existing ROMs...");
             // Clear existing ROMs for fresh scan
             _romListView.ClearRoms();
             
@@ -233,14 +229,11 @@ public class MainController
             progress?.Report("Starting fresh ROM scan...");
             
             // Step 1: Load MAME XML metadata first
-            Console.WriteLine($"CONTROLLER DEBUG: Loading MAME XML from: {_settings.MameXmlPath}");
             progress?.Report("Loading MAME metadata...");
             var mameGames = await _xmlParser.ParseAsync(_settings.MameXmlPath, 
                 new Progress<int>(p => progress?.Report($"Loading MAME XML... ({p}%)")), 
                 cancellationToken);
-            Console.WriteLine($"CONTROLLER DEBUG: Parsed {mameGames.Count} games from XML");
             var metadataLookup = mameGames.ToDictionary(g => g.Name, StringComparer.OrdinalIgnoreCase);
-            Console.WriteLine($"CONTROLLER DEBUG: Created metadata lookup with {metadataLookup.Count} entries");
             
             
             // Step 2: Scan ROMs with real-time metadata matching
@@ -666,7 +659,8 @@ public class MainController
                     return false;
 
                 // Basic validation - file exists and has content
-                // TODO: Implement actual CRC verification against rom.Metadata.RomFiles
+                // For now, we just verify the file exists and has content
+                // Future enhancement: Implement actual CRC verification against rom.Metadata.RomFiles
                 return true;
             }
             catch

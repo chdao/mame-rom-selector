@@ -223,7 +223,6 @@ public class VirtualRomListView
         }
         
         OnSelectionChanged();
-        System.Diagnostics.Debug.WriteLine($"DEBUG: Selected all ROMs - Total: {_selectedRoms.Count}");
     }
 
     /// <summary>
@@ -241,7 +240,6 @@ public class VirtualRomListView
         }
         
         OnSelectionChanged();
-        System.Diagnostics.Debug.WriteLine("DEBUG: Cleared all ROM selections");
     }
 
     /// <summary>
@@ -263,7 +261,6 @@ public class VirtualRomListView
         }
         
         OnSelectionChanged();
-        System.Diagnostics.Debug.WriteLine($"DEBUG: Selected {_selectedRoms.Count} installed ROMs");
     }
 
     /// <summary>
@@ -289,7 +286,6 @@ public class VirtualRomListView
         }
         
         OnSelectionChanged();
-        System.Diagnostics.Debug.WriteLine($"DEBUG: Selected {_selectedRoms.Count} highlighted ROMs");
     }
 
     /// <summary>

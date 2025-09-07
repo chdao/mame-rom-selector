@@ -88,7 +88,6 @@ public class RomScanner
                 var fileInfo = new FileInfo(romFile);
                 
                 // Debug output for every ROM found
-                Console.WriteLine($"ROM SCANNER DEBUG: Found ROM file: {romName} at {romFile}");
                 
                 var scannedRom = new ScannedRom
                 {
@@ -118,11 +117,8 @@ public class RomScanner
                     MatchMetadata(scannedRom, metadataLookup);
                     
                     // Debug output for metadata matching result
-                    Console.WriteLine($"ROM SCANNER DEBUG: {romName} metadata match result: {(scannedRom.HasMetadata ? "SUCCESS" : "FAILED")}");
                     if (scannedRom.HasMetadata)
                     {
-                        Console.WriteLine($"  Description: '{scannedRom.Metadata?.Description}'");
-                        Console.WriteLine($"  Year: '{scannedRom.Metadata?.Year}'");
                     }
                 }
 

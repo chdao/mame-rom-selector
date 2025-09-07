@@ -150,7 +150,6 @@ namespace MameSelector.UI
                 {
                     var rom = _destinationRoms[index];
                     // Could add context menu or details dialog here
-                    System.Diagnostics.Debug.WriteLine($"Double-clicked destination ROM: {rom.Name}");
                 }
             }
         }

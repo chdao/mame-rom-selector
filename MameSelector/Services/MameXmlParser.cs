@@ -111,7 +111,6 @@ public class MameXmlParser
         var isBios = machineElement.Attribute("isbios")?.Value == "yes";
         var isDevice = machineElement.Attribute("isdevice")?.Value == "yes";
         
-        
         if (isBios || isDevice)
             return null;
 
@@ -123,7 +122,6 @@ public class MameXmlParser
             Year = machineElement.Element("year")?.Value?.Trim() ?? string.Empty,
             Manufacturer = machineElement.Element("manufacturer")?.Value?.Trim() ?? string.Empty
         };
-
 
         // Parse ROM files
         foreach (var romElement in machineElement.Elements("rom"))
@@ -319,7 +317,6 @@ public class MameXmlParser
             {
                 if (gameName.StartsWith("1on1") || gameName.StartsWith("2mind"))
                 {
-                    System.Diagnostics.Debug.WriteLine($"DEBUG: Empty {elementType} element for {gameName}");
                 }
                 return string.Empty;
             }
@@ -329,7 +326,6 @@ public class MameXmlParser
             
             if (gameName.StartsWith("1on1") || gameName.StartsWith("2mind"))
             {
-                System.Diagnostics.Debug.WriteLine($"DEBUG: Read {elementType} for {gameName}: '{trimmedContent}' (Raw: '{content}')");
             }
             
             return trimmedContent;
@@ -338,7 +334,6 @@ public class MameXmlParser
         {
             if (gameName.StartsWith("1on1") || gameName.StartsWith("2mind"))
             {
-                System.Diagnostics.Debug.WriteLine($"DEBUG: Error reading {elementType} for {gameName}: {ex.Message}");
             }
             return string.Empty;
         }

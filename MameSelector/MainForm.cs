@@ -141,10 +141,6 @@ public partial class MainForm : Form
 
     #region Event Handlers
 
-    private async void LoadXmlToolStripButton_Click(object sender, EventArgs e)
-    {
-        await ScanRomsAsync();
-    }
 
     private void SettingsToolStripMenuItem_Click(object sender, EventArgs e)
     {
@@ -161,60 +157,6 @@ public partial class MainForm : Form
         Close();
     }
 
-    private async void TestXmlParsingToolStripMenuItem_Click(object sender, EventArgs e)
-    {
-        try
-        {
-            var xmlPath = _controller.Settings.MameXmlPath;
-            if (string.IsNullOrEmpty(xmlPath) || !File.Exists(xmlPath))
-            {
-                MessageBox.Show("Please configure the MAME XML file path in settings first.", "XML Path Required", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // Parse first few games to test
-            var parser = new MameXmlParser();
-            var games = await parser.ParseAsync(xmlPath, null, default);
-            
-            var result = $"XML Parsing Test Results:\n\n";
-            result += $"Total games parsed: {games.Count:N0}\n\n";
-            
-            // Show first 5 games with their years
-            var firstGames = games.Take(5).ToList();
-            foreach (var game in firstGames)
-            {
-                result += $"Game: {game.Name}\n";
-                result += $"  Description: {game.Description}\n";
-                result += $"  Year: '{game.Year}' (Length: {game.Year.Length})\n";
-                result += $"  Manufacturer: {game.Manufacturer}\n";
-                result += $"  Clone of: {game.CloneOf}\n\n";
-            }
-            
-            // Test specific games we know should have years
-            var testGames = new[] { "1on1gov", "2mindril", "2mindrila" };
-            result += "Specific game tests:\n";
-            foreach (var testGame in testGames)
-            {
-                var game = games.FirstOrDefault(g => g.Name == testGame);
-                if (game != null)
-                {
-                    result += $"  {testGame}: Year = '{game.Year}'\n";
-                }
-                else
-                {
-                    result += $"  {testGame}: NOT FOUND\n";
-                }
-            }
-            
-            MessageBox.Show(result, "XML Parsing Test", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Error testing XML parsing: {ex.Message}", "Error", 
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
 
     private void AboutToolStripMenuItem_Click(object sender, EventArgs e)
     {
@@ -483,11 +425,9 @@ public partial class MainForm : Form
 
     private async Task ScanRomsAsync()
     {
-        Console.WriteLine("SCAN DEBUG: Starting ROM scan...");
         
         if (_controller.IsLoading)
         {
-            Console.WriteLine("SCAN DEBUG: Controller is already loading, returning");
             return;
         }
 
@@ -496,7 +436,6 @@ public partial class MainForm : Form
 
         try
         {
-            Console.WriteLine("SCAN DEBUG: Calling controller.ScanAndLoadRomsAsync...");
             
             // Show and reset progress bar
             progressBar.Visible = true;

@@ -45,7 +45,6 @@ public class SettingsManager
             // If settings file is corrupted, create new default settings
             _cachedSettings = new AppSettings();
             // Log the error (you might want to show this to the user)
-            System.Diagnostics.Debug.WriteLine($"Error loading settings: {ex.Message}");
         }
 
         return _cachedSettings;
