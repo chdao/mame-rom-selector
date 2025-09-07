@@ -175,16 +175,8 @@ public partial class MainForm : Form
 
     private void AboutToolStripMenuItem_Click(object sender, EventArgs e)
     {
-        var about = $"MAME ROM Selector v0.1\n\n" +
-                   $"A tool for selecting and copying MAME ROMs.\n\n" +
-                   $"Features:\n" +
-                   $"• Scans actual ROM files first\n" +
-                   $"• Matches with MAME XML metadata\n" +
-                   $"• Optimized for large collections\n" +
-                   $"• Virtual list view for performance\n\n" +
-                   $"Current ROM Collection: {_romListView.AllRoms.Count:N0} ROMs";
-        
-        MessageBox.Show(about, "About", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        using var aboutForm = new AboutForm();
+        aboutForm.ShowDialog(this);
     }
 
     private void SearchTextBox_TextChanged(object sender, EventArgs e)
