@@ -42,6 +42,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      packages: write
     
     steps:
     - name: Checkout code
@@ -54,13 +57,10 @@ jobs:
         path: ./artifacts
         
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: v${{ github.run_number }}
-        release_name: MAME ROM Selector v${{ github.run_number }}
+        name: MAME ROM Selector v${{ github.run_number }}
         body: |
           ## MAME ROM Selector v${{ github.run_number }}
           
@@ -69,25 +69,17 @@ jobs:
           - Built for Windows
           
           ### Download:
-          - **Windows**: Download `mame-rom-selector-windows.zip`
+          - **Windows**: Download `MameSelector.exe`
           
           ### Installation:
-          1. Download the Windows archive
-          2. Extract the files
-          3. Run `MameSelector.exe`
+          1. Download the Windows executable
+          2. Run `MameSelector.exe`
           
           ### Requirements:
           - .NET 8.0 Runtime (included in self-contained build)
           - Windows 10/11
+        files: ./artifacts/MameSelector.exe
         draft: false
         prerelease: false
-        
-    - name: Upload Windows Release Asset
-      uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./artifacts/MameSelector.exe
-        asset_name: MameSelector.exe
-        asset_content_type: application/octet-stream
