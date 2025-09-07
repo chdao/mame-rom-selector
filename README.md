@@ -10,7 +10,7 @@ This tool helps you scan, verify, and copy ROMs from your source directory to a 
 ## Screenshot
 
 <div align="center">
-  <img src="screenshot.png" alt="MAME ROM Selector Application Interface" width="800">
+  <img src="docs/screenshot.png" alt="MAME ROM Selector Application Interface" width="800">
   <p><em>Main application interface showing ROM collection, installed ROMs, and detailed information panels</em></p>
 </div>
 
