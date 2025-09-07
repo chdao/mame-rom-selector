@@ -1,0 +1,41 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore MameSelector/MameSelector.csproj
+      
+    - name: Build
+      run: dotnet build MameSelector/MameSelector.csproj --configuration Release --no-restore
+      
+    - name: Run tests (if any)
+      run: dotnet test MameSelector/MameSelector.csproj --configuration Release --no-build --verbosity normal
+      continue-on-error: true
+      
+    - name: Check for build warnings
+      run: |
+        $buildOutput = dotnet build MameSelector/MameSelector.csproj --configuration Release --verbosity normal 2>&1
+        $warnings = $buildOutput | Select-String "warning"
+        if ($warnings) {
+          Write-Host "Build warnings found:"
+          $warnings | ForEach-Object { Write-Host $_.Line }
+        } else {
+          Write-Host "No build warnings found - build is clean!"
+        }

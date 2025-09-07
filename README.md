@@ -22,6 +22,15 @@ A Windows Forms application for managing and organizing MAME ROM collections. Th
 
 ## Installation
 
+### Option 1: Download Pre-built Release
+1. Go to the [Releases](https://github.com/chdao/mame-rom-selector/releases) page
+2. Download the appropriate archive for your platform:
+   - **Windows**: `mame-rom-selector-windows.zip`
+   - **Linux**: `mame-rom-selector-linux.zip`
+   - **macOS**: `mame-rom-selector-macos.zip`
+3. Extract the files and run the executable
+
+### Option 2: Build from Source
 1. Clone this repository
 2. Build the solution using Visual Studio or .NET CLI:
    ```bash
@@ -85,6 +94,40 @@ The right panel shows ROMs already copied to destination with:
 - Implements intelligent caching for performance
 - Supports both ROM files (.zip) and CHD directories
 - Thread-safe operations with progress reporting
+
+## Development
+
+### CI/CD Pipeline
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+- **Continuous Integration**: Automatically builds and tests the project on every push and pull request
+- **Automated Releases**: Creates releases with pre-built executables for Windows, Linux, and macOS
+- **Multi-platform Support**: Builds for all major platforms using .NET 8.0
+
+### Workflows
+
+- `ci.yml`: Basic build and test on Windows
+- `build.yml`: Full multi-platform build with automatic releases
+- `release.yml`: Manual release creation workflow
+
+### Building
+
+The project can be built using standard .NET commands:
+
+```bash
+# Restore dependencies
+dotnet restore
+
+# Build in Debug mode
+dotnet build
+
+# Build in Release mode
+dotnet build --configuration Release
+
+# Publish for specific platform
+dotnet publish --configuration Release --runtime win-x64 --self-contained true
+```
 
 ## Contributing
 

@@ -1,0 +1,142 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore MameSelector/MameSelector.csproj
+      
+    - name: Build
+      run: dotnet build MameSelector/MameSelector.csproj --configuration Release --no-restore
+      
+    - name: Test (if tests exist)
+      run: dotnet test MameSelector/MameSelector.csproj --configuration Release --no-build --verbosity normal
+      continue-on-error: true
+      
+    - name: Publish Windows executable (Windows only)
+      if: matrix.os == 'windows-latest'
+      run: dotnet publish MameSelector/MameSelector.csproj --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64
+      
+    - name: Publish Linux executable (Linux only)
+      if: matrix.os == 'ubuntu-latest'
+      run: dotnet publish MameSelector/MameSelector.csproj --configuration Release --runtime linux-x64 --self-contained true --output ./publish/linux-x64
+      
+    - name: Publish macOS executable (macOS only)
+      if: matrix.os == 'macos-latest'
+      run: dotnet publish MameSelector/MameSelector.csproj --configuration Release --runtime osx-x64 --self-contained true --output ./publish/osx-x64
+      
+    - name: Upload Windows artifacts
+      if: matrix.os == 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: mame-rom-selector-windows
+        path: ./publish/win-x64/
+        
+    - name: Upload Linux artifacts
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: mame-rom-selector-linux
+        path: ./publish/linux-x64/
+        
+    - name: Upload macOS artifacts
+      if: matrix.os == 'macos-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: mame-rom-selector-macos
+        path: ./publish/osx-x64/
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ github.run_number }}
+        release_name: MAME ROM Selector v${{ github.run_number }}
+        body: |
+          ## MAME ROM Selector v${{ github.run_number }}
+          
+          ### Changes in this release:
+          - Automated build from commit ${{ github.sha }}
+          - Built for Windows, Linux, and macOS
+          
+          ### Downloads:
+          - **Windows**: Download `mame-rom-selector-windows.zip`
+          - **Linux**: Download `mame-rom-selector-linux.zip`  
+          - **macOS**: Download `mame-rom-selector-macos.zip`
+          
+          ### Installation:
+          1. Download the appropriate archive for your platform
+          2. Extract the files
+          3. Run `MameSelector.exe` (Windows) or `MameSelector` (Linux/macOS)
+          
+          ### Requirements:
+          - .NET 8.0 Runtime (included in self-contained builds)
+          - Windows 10/11, Ubuntu 18.04+, or macOS 10.15+
+        draft: false
+        prerelease: false
+        
+    - name: Upload Windows Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/mame-rom-selector-windows.zip
+        asset_name: mame-rom-selector-windows.zip
+        asset_content_type: application/zip
+        
+    - name: Upload Linux Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/mame-rom-selector-linux.zip
+        asset_name: mame-rom-selector-linux.zip
+        asset_content_type: application/zip
+        
+    - name: Upload macOS Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/mame-rom-selector-macos.zip
+        asset_name: mame-rom-selector-macos.zip
+        asset_content_type: application/zip
