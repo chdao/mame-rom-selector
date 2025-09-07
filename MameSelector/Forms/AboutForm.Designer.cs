@@ -64,7 +64,7 @@ namespace MameSelector.Forms
             versionLabel.Name = "versionLabel";
             versionLabel.Size = new Size(60, 19);
             versionLabel.TabIndex = 2;
-            versionLabel.Text = "Version 0.3";
+            versionLabel.Text = "Version 0.3.3";
             // 
             // descriptionLabel
             // 

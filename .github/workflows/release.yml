@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g., v0.3.0)'
+        description: 'Release version (e.g., v0.3.3)'
         required: true
-        default: 'v0.3.0'
+        default: 'v0.3.3'
       release_notes:
         description: 'Release notes'
         required: false

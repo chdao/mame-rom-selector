@@ -87,7 +87,7 @@ The right panel shows ROMs already copied to destination with:
 - Delete functionality
 - Refresh capability
 
-## Recent Improvements
+## Recent Improvements (v0.3.3)
 
 - **Application Icon**: Professional icon implementation with proper taskbar and window display
 - **UI Cleanup**: Removed redundant toolstrip, streamlined interface
@@ -107,6 +107,20 @@ The right panel shows ROMs already copied to destination with:
 - Thread-safe operations with progress reporting
 - Professional application icon with multiple sizes (16x16 to 256x256)
 - Clean resource management and proper disposal patterns
+
+## Versioning
+
+This project follows semantic versioning (SemVer) with the format `MAJOR.MINOR.PATCH`:
+
+- **MAJOR**: Breaking changes or major feature additions
+- **MINOR**: New features, backwards compatible
+- **PATCH**: Bug fixes and minor improvements
+
+### Current Version: v0.3.3
+
+**Version History:**
+- **v0.3.3**: Self-contained application with embedded icon, startup crash fixes
+- **v0.3.0**: Initial stable release with core functionality
 
 ## Development
 

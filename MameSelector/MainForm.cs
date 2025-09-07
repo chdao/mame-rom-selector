@@ -61,7 +61,7 @@ public partial class MainForm : Form
 
     private void InitializeUI()
     {
-        Text = "MAME ROM Selector v0.1";
+        Text = "MAME ROM Selector v0.3.3";
         Size = new Size(1400, 900);
         StartPosition = FormStartPosition.CenterScreen;
         
