@@ -18,7 +18,22 @@ public partial class MainForm : Form
     {
         InitializeComponent();
         
-        // Icon is set in the designer file and embedded in the executable
+        // Set the application icon from embedded resources
+        try
+        {
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+            var resourceName = "MameSelector.Resources.mame-rom-selector.ico";
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream != null)
+            {
+                this.Icon = new Icon(stream);
+            }
+        }
+        catch (Exception ex)
+        {
+            // If icon loading fails, continue without icon
+            System.Diagnostics.Debug.WriteLine($"Failed to load icon: {ex.Message}");
+        }
         
         // Initialize services
         var settingsManager = new SettingsManager();

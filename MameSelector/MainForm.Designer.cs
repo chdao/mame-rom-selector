@@ -480,7 +480,7 @@ partial class MainForm
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(2200, 1000);
         FormBorderStyle = FormBorderStyle.Sizable;
-        Icon = (Icon)resources.GetObject("$this.Icon");
+        // Icon will be set in constructor to avoid resource loading issues
         MaximizeBox = true;
         MinimizeBox = true;
         MinimumSize = new Size(1600, 800);
