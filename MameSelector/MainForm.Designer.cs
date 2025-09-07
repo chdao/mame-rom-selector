@@ -480,7 +480,7 @@ partial class MainForm
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(2200, 1000);
         FormBorderStyle = FormBorderStyle.Sizable;
-        // Icon will be set in constructor
+        // Icon is embedded via ApplicationIcon property in project file
         MaximizeBox = true;
         MinimizeBox = true;
         MinimumSize = new Size(1600, 800);

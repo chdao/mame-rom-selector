@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace MameSelector.Forms
@@ -16,11 +17,23 @@ namespace MameSelector.Forms
         {
             try
             {
-                var iconPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "mame-rom-selector.ico");
-                if (System.IO.File.Exists(iconPath))
+                // Try to get the icon from the main form's embedded resources
+                var mainForm = Application.OpenForms.OfType<MainForm>().FirstOrDefault();
+                if (mainForm?.Icon != null)
                 {
-                    using var icon = new Icon(iconPath);
-                    iconPictureBox.Image = icon.ToBitmap();
+                    iconPictureBox.Image = mainForm.Icon.ToBitmap();
+                }
+                else
+                {
+                    // Try to load from embedded resources directly
+                    var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+                    var resourceName = "MameSelector.Resources.mame-rom-selector.ico";
+                    using var stream = assembly.GetManifestResourceStream(resourceName);
+                    if (stream != null)
+                    {
+                        using var icon = new Icon(stream);
+                        iconPictureBox.Image = icon.ToBitmap();
+                    }
                 }
             }
             catch

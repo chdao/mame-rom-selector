@@ -18,20 +18,7 @@ public partial class MainForm : Form
     {
         InitializeComponent();
         
-        // Set the application icon
-        try
-        {
-            var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "mame-rom-selector.ico");
-            if (File.Exists(iconPath))
-            {
-                this.Icon = new Icon(iconPath);
-            }
-        }
-        catch (Exception ex)
-        {
-            // If icon loading fails, continue without icon
-            System.Diagnostics.Debug.WriteLine($"Failed to load icon: {ex.Message}");
-        }
+        // Icon is set in the designer file and embedded in the executable
         
         // Initialize services
         var settingsManager = new SettingsManager();
