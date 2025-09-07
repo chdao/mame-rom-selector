@@ -1,6 +1,11 @@
 # MAME ROM Selector
 
-A Windows Forms application for managing and organizing MAME ROM collections. This tool helps you scan, verify, and copy ROMs from your source directory to a destination directory, with support for CHD files and comprehensive metadata matching.
+<div align="center">
+  <img src="MameSelector/Resources/mame-rom-selector.ico" alt="MAME ROM Selector Icon" width="64" height="64">
+  <h3>A Windows Forms application for managing and organizing MAME ROM collections</h3>
+</div>
+
+This tool helps you scan, verify, and copy ROMs from your source directory to a destination directory, with support for CHD files and comprehensive metadata matching.
 
 ## Features
 
@@ -77,12 +82,14 @@ The right panel shows ROMs already copied to destination with:
 
 ## Recent Improvements
 
+- **Application Icon**: Professional icon implementation with proper taskbar and window display
 - **UI Cleanup**: Removed redundant toolstrip, streamlined interface
 - **Button Organization**: Logical grouping of ROM management functions
 - **Large Selection Warning**: Warns when copying more than 100 ROMs
 - **Duplicate Operation Prevention**: Guards against multiple simultaneous operations
 - **CHD Directory Management**: Proper handling of CHD directories during copy/delete
 - **Performance Optimization**: Removed unnecessary hash calculations during startup
+- **Clean Shutdown**: Fixed empty window flash during application exit
 
 ## Technical Details
 
@@ -91,6 +98,8 @@ The right panel shows ROMs already copied to destination with:
 - Implements intelligent caching for performance
 - Supports both ROM files (.zip) and CHD directories
 - Thread-safe operations with progress reporting
+- Professional application icon with multiple sizes (16x16 to 256x256)
+- Clean resource management and proper disposal patterns
 
 ## Development
 
