@@ -99,13 +99,13 @@ The right panel shows ROMs already copied to destination with:
 This project uses GitHub Actions for continuous integration and deployment:
 
 - **Continuous Integration**: Automatically builds and tests the project on every push and pull request
-- **Automated Releases**: Creates releases with pre-built Windows executables
+- **Manual Releases**: Create releases with pre-built Windows executables when ready
 - **Windows-focused**: Optimized for Windows Forms applications using .NET 8.0
 
 ### Workflows
 
 - `ci.yml`: Basic build and test on Windows
-- `build.yml`: Windows build with automatic releases
+- `build.yml`: Windows build and artifact creation
 - `release.yml`: Manual release creation workflow
 
 ### Building
