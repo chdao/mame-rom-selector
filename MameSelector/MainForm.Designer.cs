@@ -17,6 +17,20 @@ partial class MainForm
         {
             components.Dispose();
         }
+        
+        // Dispose cancellation token source if it exists
+        if (disposing)
+        {
+            try
+            {
+                _cancellationTokenSource?.Dispose();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+        
         base.Dispose(disposing);
     }
 
@@ -28,6 +42,7 @@ partial class MainForm
     /// </summary>
     private void InitializeComponent()
     {
+        System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
         menuStrip = new MenuStrip();
         fileToolStripMenuItem = new ToolStripMenuItem();
         settingsToolStripMenuItem = new ToolStripMenuItem();
@@ -465,6 +480,7 @@ partial class MainForm
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(2200, 1000);
         FormBorderStyle = FormBorderStyle.Sizable;
+        // Icon will be set in constructor
         MaximizeBox = true;
         MinimizeBox = true;
         MinimumSize = new Size(1600, 800);

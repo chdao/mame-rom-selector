@@ -18,6 +18,21 @@ public partial class MainForm : Form
     {
         InitializeComponent();
         
+        // Set the application icon
+        try
+        {
+            var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "mame-rom-selector.ico");
+            if (File.Exists(iconPath))
+            {
+                this.Icon = new Icon(iconPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            // If icon loading fails, continue without icon
+            System.Diagnostics.Debug.WriteLine($"Failed to load icon: {ex.Message}");
+        }
+        
         // Initialize services
         var settingsManager = new SettingsManager();
         var romScanner = new RomScanner();
@@ -660,7 +675,25 @@ public partial class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        _cancellationTokenSource?.Cancel();
+        try
+        {
+            _cancellationTokenSource?.Cancel();
+        }
+        catch
+        {
+            // Ignore cancellation errors during shutdown
+        }
+        
+        try
+        {
+            _cancellationTokenSource?.Dispose();
+        }
+        catch
+        {
+            // Ignore disposal errors during shutdown
+        }
+        
         base.OnFormClosing(e);
     }
+
 }
