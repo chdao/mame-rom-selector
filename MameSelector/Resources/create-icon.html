@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MAME ROM Selector Icon Generator</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .icon-preview { display: inline-block; margin: 10px; text-align: center; }
+        canvas { border: 1px solid #ccc; margin: 5px; }
+        .instructions { background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>MAME ROM Selector Icon Generator</h1>
+    
+    <div class="instructions">
+        <h3>Instructions:</h3>
+        <ol>
+            <li>Right-click on each canvas below</li>
+            <li>Select "Save image as..."</li>
+            <li>Save with the suggested filename</li>
+            <li>Use an online ICO converter to create app.ico</li>
+        </ol>
+    </div>
+
+    <div class="icon-preview">
+        <h3>16x16</h3>
+        <canvas id="icon16" width="16" height="16"></canvas>
+        <br><small>Save as: app-16.png</small>
+    </div>
+
+    <div class="icon-preview">
+        <h3>32x32</h3>
+        <canvas id="icon32" width="32" height="32"></canvas>
+        <br><small>Save as: app-32.png</small>
+    </div>
+
+    <div class="icon-preview">
+        <h3>48x48</h3>
+        <canvas id="icon48" width="48" height="48"></canvas>
+        <br><small>Save as: app-48.png</small>
+    </div>
+
+    <div class="icon-preview">
+        <h3>64x64</h3>
+        <canvas id="icon64" width="64" height="64"></canvas>
+        <br><small>Save as: app-64.png</small>
+    </div>
+
+    <div class="icon-preview">
+        <h3>128x128</h3>
+        <canvas id="icon128" width="128" height="128"></canvas>
+        <br><small>Save as: app-128.png</small>
+    </div>
+
+    <div class="icon-preview">
+        <h3>256x256</h3>
+        <canvas id="icon256" width="256" height="256"></canvas>
+        <br><small>Save as: app-256.png</small>
+    </div>
+
+    <script>
+        function drawIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            const scale = size / 64; // Base size is 64x64
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+            
+            // Background circle
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Game controller outline
+            ctx.strokeStyle = '#ecf0f1';
+            ctx.lineWidth = Math.max(1, scale * 2);
+            ctx.strokeRect(size * 0.2, size * 0.3, size * 0.6, size * 0.4);
+            
+            // Controller buttons
+            ctx.fillStyle = '#ecf0f1';
+            ctx.beginPath();
+            ctx.arc(size * 0.35, size * 0.45, scale * 3, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(size * 0.65, size * 0.45, scale * 3, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // D-pad
+            ctx.fillRect(size * 0.25, size * 0.4, scale * 2, scale * 4);
+            ctx.fillRect(size * 0.22, size * 0.42, scale * 6, scale * 2);
+            
+            // ROM chip symbol
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(size * 0.4, size * 0.15, size * 0.2, size * 0.1);
+            ctx.fillStyle = '#ecf0f1';
+            ctx.fillRect(size * 0.42, size * 0.17, size * 0.16, size * 0.06);
+        }
+        
+        // Draw all icons
+        drawIcon(document.getElementById('icon16'), 16);
+        drawIcon(document.getElementById('icon32'), 32);
+        drawIcon(document.getElementById('icon48'), 48);
+        drawIcon(document.getElementById('icon64'), 64);
+        drawIcon(document.getElementById('icon128'), 128);
+        drawIcon(document.getElementById('icon256'), 256);
+    </script>
+</body>
+</html>

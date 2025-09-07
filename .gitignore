@@ -365,3 +365,7 @@ $RECYCLE.BIN/
 # MAME ROM Selector specific
 *.cache
 *.log
+
+# Icon files (keep these in repository)
+!MameSelector/Resources/*.ico
+!MameSelector/Resources/*.png
