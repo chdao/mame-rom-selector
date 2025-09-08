@@ -62,6 +62,21 @@ This project demonstrates how AI coding assistants can accelerate development wh
 - Windows 10/11
 - MAME XML file (typically `mame.xml` or similar)
 
+### Getting MAME ROMs and XML Files
+
+For MAME ROM collections and datfiles, we recommend using [PleasureDome](https://pleasuredome.github.io/pleasuredome/mame/), which provides:
+
+- **Complete MAME ROM sets** (merged, non-merged, split)
+- **MAME CHD files** for games requiring disk images
+- **Official datfiles** for ROM management and verification
+- **BIOS and device files** for proper emulation
+- **Update sets** for keeping collections current
+
+**Recommended for this tool:**
+- Download the **MAME XML file** (datfile) from PleasureDome for metadata matching
+- Use **non-merged ROM sets** for individual game selection (each game is self-contained)
+- Include **BIOS and device files** for complete compatibility
+
 ## Installation
 
 ### Option 1: Download Pre-built Release
@@ -84,12 +99,17 @@ This project demonstrates how AI coding assistants can accelerate development wh
 
 ### Initial Setup
 
-1. **Configure Settings**: Go to `File > Settings` to configure:
+1. **Get MAME Files**: Download ROMs and XML datfile from [PleasureDome](https://pleasuredome.github.io/pleasuredome/mame/)
+   - **Recommended**: Use non-merged ROM sets for individual game selection
+   - **XML File**: Download the MAME datfile for metadata matching
+   - **BIOS/Devices**: Include BIOS and device files for complete compatibility
+
+2. **Configure Settings**: Go to `File > Settings` to configure:
    - ROM Repository Path (source directory containing your ROM files)
    - Destination Path (where you want to copy selected ROMs)
    - MAME XML Path (path to your MAME XML file)
 
-2. **Scan ROMs**: Click the "Scan ROMs" button to scan your ROM repository and match with MAME XML metadata
+3. **Scan ROMs**: Click the "Scan ROMs" button to scan your ROM repository and match with MAME XML metadata
 
 ### Main Operations
 
