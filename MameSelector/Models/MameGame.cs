@@ -11,6 +11,8 @@ public class MameGame
     public string Year { get; set; } = string.Empty;
     public string CloneOf { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
+    public bool IsBios { get; set; } = false;
+    public bool IsDevice { get; set; } = false;
     public bool IsClone => !string.IsNullOrEmpty(CloneOf);
     public List<RomFile> RomFiles { get; set; } = new();
     public List<DiskFile> DiskFiles { get; set; } = new();

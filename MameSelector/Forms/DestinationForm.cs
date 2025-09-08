@@ -28,6 +28,15 @@ namespace MameSelector.Forms
 
         public DestinationForm()
         {
+            _destinationListView = new ListView();
+            _toolStrip = new ToolStrip();
+            _statusLabel = new ToolStripLabel();
+            _refreshButton = new ToolStripButton();
+            _deleteButton = new ToolStripButton();
+            _openFolderButton = new ToolStripButton();
+            _statusStrip = new StatusStrip();
+            _countLabel = new ToolStripStatusLabel();
+            _sizeLabel = new ToolStripStatusLabel();
             SetupUI();
         }
 

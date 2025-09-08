@@ -81,7 +81,7 @@ public class SettingsManager
             // Update the settings file path based on the loaded portable mode setting
             _settingsFilePath = GetSettingsFilePath(_cachedSettings.PortableMode);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // If settings file is corrupted, create new default settings
             _cachedSettings = new AppSettings();

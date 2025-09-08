@@ -107,12 +107,9 @@ public class MameXmlParser
         if (string.IsNullOrEmpty(name))
             return null;
 
-        // Skip BIOS and device entries
+        // Include both BIOS and device entries (filtering will be done in UI)
         var isBios = machineElement.Attribute("isbios")?.Value == "yes";
         var isDevice = machineElement.Attribute("isdevice")?.Value == "yes";
-        
-        if (isBios || isDevice)
-            return null;
 
         var game = new MameGame
         {
@@ -120,7 +117,9 @@ public class MameXmlParser
             CloneOf = machineElement.Attribute("cloneof")?.Value ?? string.Empty,
             Description = machineElement.Element("description")?.Value?.Trim() ?? string.Empty,
             Year = machineElement.Element("year")?.Value?.Trim() ?? string.Empty,
-            Manufacturer = machineElement.Element("manufacturer")?.Value?.Trim() ?? string.Empty
+            Manufacturer = machineElement.Element("manufacturer")?.Value?.Trim() ?? string.Empty,
+            IsBios = isBios,
+            IsDevice = isDevice
         };
 
         // Parse ROM files
@@ -151,12 +150,9 @@ public class MameXmlParser
         
         try
         {
-            // Check for BIOS and device entries first
+            // Include both BIOS and device entries (filtering will be done in UI)
             var isBios = reader.GetAttribute("isbios") == "yes";
             var isDevice = reader.GetAttribute("isdevice") == "yes";
-            
-            if (isBios || isDevice)
-                return Task.FromResult<MameGame?>(null);
 
             if (string.IsNullOrEmpty(nameAttr))
                 return Task.FromResult<MameGame?>(null);
@@ -188,10 +184,15 @@ public class MameXmlParser
     /// </summary>
     private MameGame? ParseMachineElementRobust(XmlReader reader, string name)
     {
+        var isBios = reader.GetAttribute("isbios") == "yes";
+        var isDevice = reader.GetAttribute("isdevice") == "yes";
+        
         var game = new MameGame
         {
             Name = name,
-            CloneOf = reader.GetAttribute("cloneof") ?? string.Empty
+            CloneOf = reader.GetAttribute("cloneof") ?? string.Empty,
+            IsBios = isBios,
+            IsDevice = isDevice
         };
 
         // Read through the machine element content step by step
@@ -330,7 +331,7 @@ public class MameXmlParser
             
             return trimmedContent;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             if (gameName.StartsWith("1on1") || gameName.StartsWith("2mind"))
             {

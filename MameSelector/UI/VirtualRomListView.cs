@@ -15,6 +15,11 @@ public class VirtualRomListView
     private string _currentFilter = string.Empty;
     private int _sortColumn = -1;
     private SortOrder _sortOrder = SortOrder.None;
+    private readonly System.Windows.Forms.Timer _refreshTimer;
+    private bool _needsRefresh = false;
+    private bool _isScanning = false;
+    private int _lastVirtualListSize = 0;
+    private int _pendingSizeUpdate = 0;
 
     public event EventHandler<RomSelectionChangedEventArgs>? SelectionChanged;
     public event EventHandler<RomDoubleClickEventArgs>? RomDoubleClick;
@@ -33,6 +38,30 @@ public class VirtualRomListView
         _toolTip.ShowAlways = false;
         _toolTip.InitialDelay = 300;
         _toolTip.AutoPopDelay = 5000;
+        
+        // Setup refresh timer to throttle UI updates
+        _refreshTimer = new System.Windows.Forms.Timer();
+        _refreshTimer.Interval = 25; // 25ms delay for very responsive updates
+        _refreshTimer.Tick += (s, e) => 
+        {
+            // Handle pending size updates (always process these)
+            if (_pendingSizeUpdate > 0 && _pendingSizeUpdate != _lastVirtualListSize)
+            {
+                _listView.VirtualListSize = _pendingSizeUpdate;
+                _lastVirtualListSize = _pendingSizeUpdate;
+                _pendingSizeUpdate = 0;
+            }
+            
+            // Handle refresh requests (only when not scanning)
+            if (_needsRefresh && !_isScanning)
+            {
+                _listView.VirtualListSize = _filteredRoms.Count;
+                _listView.Invalidate();
+                _needsRefresh = false;
+            }
+        };
+        _refreshTimer.Start();
+        
         SetupListView();
     }
 
@@ -126,7 +155,60 @@ public class VirtualRomListView
     public void UpdateRoms(IEnumerable<ScannedRom> roms)
     {
         _allRoms = roms.ToList();
-        ApplyFilter(_currentFilter);
+        ApplyFilter(_currentFilter, true); // Will be updated when settings change
+    }
+
+    /// <summary>
+    /// Adds a single ROM to the collection without triggering any UI updates
+    /// Perfect for bulk operations like cache loading
+    /// </summary>
+    public void AddRomSilent(ScannedRom rom)
+    {
+        if (InvokeRequired)
+        {
+            _listView.Invoke(new Action<ScannedRom>(AddRomSilent), rom);
+            return;
+        }
+
+        // Check if ROM already exists (update scenario)
+        var existingIndex = _allRoms.FindIndex(r => r.Name.Equals(rom.Name, StringComparison.OrdinalIgnoreCase));
+        if (existingIndex >= 0)
+        {
+            _allRoms[existingIndex] = rom;
+        }
+        else
+        {
+            _allRoms.Add(rom);
+        }
+
+        // Check if the ROM matches current filter
+        var matchesFilter = string.IsNullOrWhiteSpace(_currentFilter) ||
+                           rom.Name.Contains(_currentFilter, StringComparison.OrdinalIgnoreCase) ||
+                           rom.DisplayName.Contains(_currentFilter, StringComparison.OrdinalIgnoreCase) ||
+                           rom.DisplayManufacturer.Contains(_currentFilter, StringComparison.OrdinalIgnoreCase);
+
+        if (matchesFilter)
+        {
+            // Update filtered list
+            var filteredIndex = _filteredRoms.FindIndex(r => r.Name.Equals(rom.Name, StringComparison.OrdinalIgnoreCase));
+            if (filteredIndex >= 0)
+            {
+                _filteredRoms[filteredIndex] = rom;
+            }
+            else
+            {
+                _filteredRoms.Add(rom);
+            }
+
+            // Update VirtualListSize immediately to show new elements
+            var newSize = _filteredRoms.Count;
+            if (newSize != _lastVirtualListSize)
+            {
+                _listView.VirtualListSize = newSize;
+                _lastVirtualListSize = newSize;
+                // No Invalidate() call - this prevents UI freezing while showing items
+            }
+        }
     }
 
     /// <summary>
@@ -170,17 +252,100 @@ public class VirtualRomListView
                 _filteredRoms.Add(rom);
             }
 
-            // Update virtual list size and refresh
+            // Track size changes but be very conservative with UI updates
+            var newSize = _filteredRoms.Count;
+            if (newSize != _lastVirtualListSize)
+            {
+                _lastVirtualListSize = newSize;
+                
+                // Only update VirtualListSize and invalidate if we're not scanning
+                // and the user is viewing near the end where new items would appear
+                if (!_isScanning && _listView.TopItem != null)
+                {
+                    var visibleCount = _listView.ClientSize.Height / 20; // Approximate item height
+                    var currentTopIndex = _listView.TopItem.Index;
+                    
+                    // Only update if user is near the end where new items would appear
+                    if (currentTopIndex + visibleCount >= newSize - 5)
+                    {
+                        _listView.VirtualListSize = newSize;
+                        _listView.Invalidate();
+                    }
+                }
+                // During scanning, don't update VirtualListSize at all
+                // This prevents UI freezing while still tracking the count
+            }
+        }
+    }
+
+
+    /// <summary>
+    /// Adds multiple ROMs in a batch for better performance
+    /// This method should only be called from the UI thread
+    /// </summary>
+    public void AddRomsBatch(IEnumerable<ScannedRom> roms)
+    {
+        var romsList = roms.ToList();
+        if (romsList.Count == 0) return;
+
+        try
+        {
+            // Add all ROMs to the collection
+            foreach (var rom in romsList)
+            {
+                AddRomInternal(rom);
+            }
+
+            // Update virtual list size once for the entire batch
             _listView.VirtualListSize = _filteredRoms.Count;
             
-            // Only invalidate the new item area to avoid flickering
-            if (filteredIndex < 0) // New item
+            // Force refresh of the list view once for the entire batch
+            _listView.Invalidate();
+            
+            // Notify selection change once for the entire batch
+            OnSelectionChanged();
+        }
+        catch (Exception ex)
+        {
+            // Log the error for debugging
+            System.Diagnostics.Debug.WriteLine($"Error in AddRomsBatch: {ex.Message}");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Internal method to add a ROM without UI updates (for batching)
+    /// </summary>
+    private void AddRomInternal(ScannedRom rom)
+    {
+        // Check if ROM already exists (update scenario)
+        var existingIndex = _allRoms.FindIndex(r => r.Name.Equals(rom.Name, StringComparison.OrdinalIgnoreCase));
+        if (existingIndex >= 0)
+        {
+            _allRoms[existingIndex] = rom;
+        }
+        else
+        {
+            _allRoms.Add(rom);
+        }
+
+        // Check if the ROM matches current filter
+        var matchesFilter = string.IsNullOrWhiteSpace(_currentFilter) ||
+                           rom.Name.Contains(_currentFilter, StringComparison.OrdinalIgnoreCase) ||
+                           rom.DisplayName.Contains(_currentFilter, StringComparison.OrdinalIgnoreCase) ||
+                           rom.DisplayManufacturer.Contains(_currentFilter, StringComparison.OrdinalIgnoreCase);
+
+        if (matchesFilter)
+        {
+            // Update filtered list
+            var filteredIndex = _filteredRoms.FindIndex(r => r.Name.Equals(rom.Name, StringComparison.OrdinalIgnoreCase));
+            if (filteredIndex >= 0)
             {
-                _listView.Invalidate();
+                _filteredRoms[filteredIndex] = rom;
             }
-            else // Updated item
+            else
             {
-                _listView.RedrawItems(filteredIndex, filteredIndex, false);
+                _filteredRoms.Add(rom);
             }
         }
     }
@@ -199,6 +364,7 @@ public class VirtualRomListView
         _allRoms.Clear();
         _filteredRoms.Clear();
         _selectedRoms.Clear();
+        _lastVirtualListSize = 0;
         _listView.VirtualListSize = 0;
         _listView.Invalidate();
         OnSelectionChanged();
@@ -300,13 +466,16 @@ public class VirtualRomListView
     /// <summary>
     /// Applies a filter to the ROM list
     /// </summary>
-    public void ApplyFilter(string filter)
+    public void ApplyFilter(string filter, bool showDevices = true)
     {
         _currentFilter = filter;
 
+        // First apply BIOS/device filter
+        var baseRoms = showDevices ? _allRoms : _allRoms.Where(rom => !rom.IsBios && !rom.IsDevice).ToList();
+
         if (string.IsNullOrWhiteSpace(filter))
         {
-            _filteredRoms = new List<ScannedRom>(_allRoms);
+            _filteredRoms = new List<ScannedRom>(baseRoms);
         }
         else
         {
@@ -318,15 +487,15 @@ public class VirtualRomListView
                 var destinationFilter = filterLower.Substring("destination:".Length);
                 _filteredRoms = destinationFilter switch
                 {
-                    "installed" => _allRoms.Where(rom => rom.InDestination).ToList(),
-                    "not-installed" => _allRoms.Where(rom => !rom.InDestination).ToList(),
-                    _ => _allRoms.ToList()
+                    "installed" => baseRoms.Where(rom => rom.InDestination).ToList(),
+                    "not-installed" => baseRoms.Where(rom => !rom.InDestination).ToList(),
+                    _ => baseRoms.ToList()
                 };
             }
             else
             {
                 // Regular text filter
-                _filteredRoms = _allRoms.Where(rom =>
+                _filteredRoms = baseRoms.Where(rom =>
                     rom.Name.Contains(filterLower, StringComparison.OrdinalIgnoreCase) ||
                     rom.DisplayName.Contains(filterLower, StringComparison.OrdinalIgnoreCase) ||
                     rom.DisplayManufacturer.Contains(filterLower, StringComparison.OrdinalIgnoreCase)
@@ -338,7 +507,8 @@ public class VirtualRomListView
         SortRoms();
 
         // Update virtual list size and refresh
-        _listView.VirtualListSize = _filteredRoms.Count;
+        _lastVirtualListSize = _filteredRoms.Count;
+        _listView.VirtualListSize = _lastVirtualListSize;
         _listView.Invalidate();
     }
 
@@ -377,6 +547,58 @@ public class VirtualRomListView
             CloneRoms = _filteredRoms.Count(r => r.IsClone),
             TotalSelectedSize = _selectedRoms.Sum(r => r.TotalSize)
         };
+    }
+
+    /// <summary>
+    /// Gets the current filter string
+    /// </summary>
+    public string GetCurrentFilter()
+    {
+        return _currentFilter;
+    }
+
+    /// <summary>
+    /// Gets all currently selected ROMs
+    /// </summary>
+    public List<ScannedRom> GetSelectedRoms()
+    {
+        return _selectedRoms.ToList();
+    }
+
+    /// <summary>
+    /// Gets all ROMs in the collection
+    /// </summary>
+    public List<ScannedRom> GetAllRoms()
+    {
+        return _allRoms.ToList();
+    }
+
+    /// <summary>
+    /// Refreshes the selection display
+    /// </summary>
+    public void RefreshSelection()
+    {
+        if (_listView.InvokeRequired)
+        {
+            _listView.Invoke(new Action(RefreshSelection));
+            return;
+        }
+
+        // Sync the _selectedRoms collection with the IsSelected properties
+        _selectedRoms.Clear();
+        foreach (var rom in _allRoms.Where(r => r.IsSelected))
+        {
+            _selectedRoms.Add(rom);
+        }
+
+        // Force refresh of all visible items
+        if (_filteredRoms.Count > 0)
+        {
+            _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
+            _listView.Update();
+        }
+
+        OnSelectionChanged();
     }
 
     /// <summary>
@@ -568,6 +790,34 @@ public class VirtualRomListView
             counter++;
         }
         return $"{number:n1} {suffixes[counter]}";
+    }
+
+    /// <summary>
+    /// Sets the scanning state to control UI updates
+    /// </summary>
+    public void SetScanningState(bool isScanning)
+    {
+        _isScanning = isScanning;
+        if (!isScanning)
+        {
+            // Force refresh of the current filter to ensure all ROMs are visible
+            ApplyFilter(_currentFilter, true);
+            
+            // Update size and refresh when scanning completes
+            _lastVirtualListSize = _filteredRoms.Count;
+            _listView.VirtualListSize = _lastVirtualListSize;
+            _listView.Invalidate();
+        }
+    }
+
+    /// <summary>
+    /// Disposes of resources
+    /// </summary>
+    public void Dispose()
+    {
+        _refreshTimer?.Stop();
+        _refreshTimer?.Dispose();
+        _toolTip?.Dispose();
     }
 }
 

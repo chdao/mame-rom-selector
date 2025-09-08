@@ -11,6 +11,7 @@ public class AppSettings
     public string CHDRepositoryPath { get; set; } = string.Empty;
     public bool CopyBiosFiles { get; set; } = true;
     public bool CopyDeviceFiles { get; set; } = true;
+    public bool ShowBiosAndDevices { get; set; } = true; // Show BIOS and device files in ROM Collection by default
     public bool CreateSubfolders { get; set; } = false;
     public bool VerifyChecksums { get; set; } = false;
     

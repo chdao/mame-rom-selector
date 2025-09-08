@@ -47,6 +47,7 @@ partial class SettingsForm
         checkBoxCreateSubfolders = new CheckBox();
         checkBoxVerifyChecksums = new CheckBox();
         checkBoxPortableMode = new CheckBox();
+        checkBoxShowDevices = new CheckBox();
         buttonOK = new Button();
         buttonCancel = new Button();
         
@@ -195,6 +196,7 @@ partial class SettingsForm
         // 
         // groupBoxOptions
         // 
+        groupBoxOptions.Controls.Add(checkBoxShowDevices);
         groupBoxOptions.Controls.Add(checkBoxPortableMode);
         groupBoxOptions.Controls.Add(checkBoxVerifyChecksums);
         groupBoxOptions.Controls.Add(checkBoxCreateSubfolders);
@@ -202,7 +204,7 @@ partial class SettingsForm
         groupBoxOptions.Controls.Add(checkBoxCopyBios);
         groupBoxOptions.Location = new Point(12, 178);
         groupBoxOptions.Name = "groupBoxOptions";
-        groupBoxOptions.Size = new Size(560, 120);
+        groupBoxOptions.Size = new Size(560, 145);
         groupBoxOptions.TabIndex = 1;
         groupBoxOptions.TabStop = false;
         groupBoxOptions.Text = "Copy Options";
@@ -261,6 +263,17 @@ partial class SettingsForm
         checkBoxPortableMode.TabIndex = 4;
         checkBoxPortableMode.Text = "Portable mode (store cache alongside exe)";
         checkBoxPortableMode.UseVisualStyleBackColor = true;
+        
+        // 
+        // checkBoxShowDevices
+        // 
+        checkBoxShowDevices.AutoSize = true;
+        checkBoxShowDevices.Location = new Point(200, 75);
+        checkBoxShowDevices.Name = "checkBoxShowDevices";
+        checkBoxShowDevices.Size = new Size(280, 19);
+        checkBoxShowDevices.TabIndex = 5;
+        checkBoxShowDevices.Text = "Show BIOS and device files in ROM Collection";
+        checkBoxShowDevices.UseVisualStyleBackColor = true;
         
         // 
         // buttonOK
@@ -329,6 +342,7 @@ partial class SettingsForm
     private CheckBox checkBoxCreateSubfolders;
     private CheckBox checkBoxVerifyChecksums;
     private CheckBox checkBoxPortableMode;
+    private CheckBox checkBoxShowDevices;
     private Button buttonOK;
     private Button buttonCancel;
 }

@@ -17,6 +17,7 @@ public class MainController
     private readonly RomCopyService _copyService;
     private readonly VirtualRomListView _romListView;
     private DestinationRomListView? _destinationRomListView;
+    private MainForm? _mainForm;
 
     private AppSettings _settings;
     private Dictionary<string, ScannedRom> _scannedRoms = new();
@@ -53,6 +54,14 @@ public class MainController
     /// Gets the current application settings
     /// </summary>
     public AppSettings Settings => _settings;
+
+    /// <summary>
+    /// Sets the MainForm reference for status updates
+    /// </summary>
+    public void SetMainForm(MainForm mainForm)
+    {
+        _mainForm = mainForm;
+    }
 
     /// <summary>
     /// Sets the destination ROM list view for updates
@@ -101,6 +110,7 @@ public class MainController
         {
             var oldSettings = _settings;
             var portableModeChanged = oldSettings.PortableMode != newSettings.PortableMode;
+            var showBiosAndDevicesChanged = oldSettings.ShowBiosAndDevices != newSettings.ShowBiosAndDevices;
             
             _settings = newSettings;
             
@@ -121,6 +131,12 @@ public class MainController
                 }
             }
             
+            // Refresh filter if show BIOS and devices setting changed
+            if (showBiosAndDevicesChanged)
+            {
+                RefreshFilter();
+            }
+            
             // Save settings
             await _settingsManager.SaveSettingsAsync(_settings);
             UpdateStatus("Settings saved successfully");
@@ -135,7 +151,7 @@ public class MainController
     /// <summary>
     /// Migrates cache from AppData to portable location
     /// </summary>
-    private async Task MigrateCacheToPortableAsync()
+    private Task MigrateCacheToPortableAsync()
     {
         try
         {
@@ -156,12 +172,13 @@ public class MainController
         {
             UpdateStatus($"Warning: Could not migrate cache to portable location: {ex.Message}");
         }
+        return Task.CompletedTask;
     }
 
     /// <summary>
     /// Migrates cache from portable location to AppData
     /// </summary>
-    private async Task MigrateCacheToAppDataAsync()
+    private Task MigrateCacheToAppDataAsync()
     {
         try
         {
@@ -184,6 +201,7 @@ public class MainController
         {
             UpdateStatus($"Warning: Could not migrate cache to AppData location: {ex.Message}");
         }
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -228,11 +246,8 @@ public class MainController
             // Then try to load from cache with progress and real-time updates
             progress?.Report("Loading ROM cache...");
             
-            // Real-time ROM callback for cache loading
-            var romLoadedCallback = new Action<ScannedRom>(rom => 
-            {
-                _romListView.AddRom(rom);
-            });
+            // Set scanning state to prevent UI flickering during cache loading
+            _romListView.SetScanningState(true);
             
             // Progress callback for cache loading
             var cacheProgress = new Progress<int>(percent => 
@@ -241,12 +256,57 @@ public class MainController
                 OnProgressUpdated(percent);
             });
             
-            var cachedRoms = await _cacheService.LoadCacheAsync(_settings, cacheProgress, romLoadedCallback);
+            // No individual ROM callbacks - process everything in background
+            var cachedRoms = await _cacheService.LoadCacheAsync(_settings, cacheProgress, null);
             
             if (cachedRoms != null && cachedRoms.Count > 0)
             {
-                // Cache hit! ROMs already loaded via callback
+                // Cache hit! Load all ROMs at once
                 _scannedRoms = cachedRoms;
+                
+                // Update status bar counts from cached ROMs
+                _mainForm?.UpdateRomCount(cachedRoms.Count);
+                var chdCount = cachedRoms.Values.Count(r => r.ChdFiles?.Count > 0);
+                
+                // For cache loading, we need to calculate total CHD directories from the cached data
+                // This is the total number of unique CHD directories that were found during the original scan
+                var totalChdDirectories = cachedRoms.Values.Count(r => r.ChdFiles?.Count > 0);
+                _mainForm?.UpdateChdCount(totalChdDirectories);
+                
+                // Debug: Log CHD count calculation
+                _mainForm?.LogDebug($"Cache load: Total ROMs: {cachedRoms.Count}, CHDs: {chdCount}");
+                
+                // More detailed debugging
+                var romsWithChds = cachedRoms.Values.Where(r => r.ChdFiles?.Count > 0).ToList();
+                _mainForm?.LogDebug($"ROMs with CHDs found: {romsWithChds.Count}");
+                
+                if (romsWithChds.Any())
+                {
+                    var sampleRom = romsWithChds.First();
+                    _mainForm?.LogDebug($"Sample ROM with CHDs: {sampleRom.Name} has {sampleRom.ChdFiles?.Count} CHD files");
+                    if (sampleRom.ChdFiles?.Any() == true)
+                    {
+                        _mainForm?.LogDebug($"First CHD file: {sampleRom.ChdFiles.First()}");
+                    }
+                }
+                else
+                {
+                    // Check if any ROMs have ChdFiles property but it's empty
+                    var romsWithEmptyChds = cachedRoms.Values.Where(r => r.ChdFiles != null && r.ChdFiles.Count == 0).Count();
+                    _mainForm?.LogDebug($"ROMs with empty ChdFiles: {romsWithEmptyChds}");
+                    
+                    // Check if any ROMs have null ChdFiles
+                    var romsWithNullChds = cachedRoms.Values.Where(r => r.ChdFiles == null).Count();
+                    _mainForm?.LogDebug($"ROMs with null ChdFiles: {romsWithNullChds}");
+                }
+                
+                _mainForm?.UpdateChdCount(chdCount);
+                
+                // Bulk update the UI with all cached ROMs at once
+                _romListView.UpdateRoms(cachedRoms.Values);
+                
+                // Clear scanning state after bulk update
+                _romListView.SetScanningState(false);
                 
                 // Re-scan destination directory to mark installed ROMs
                 if (!string.IsNullOrEmpty(_settings.DestinationPath))
@@ -261,6 +321,10 @@ public class MainController
                     // Refresh the UI to show destination status
                     _romListView.RefreshDisplay();
                     _destinationRomListView?.UpdateDestinationRoms(_scannedRoms.Values.ToList());
+                    
+                    // Update installed count in status bar
+                    _mainForm?.UpdateInstalledCount(destinationCount);
+                    
                     progress?.Report($"Updated destination status for {destinationCount} ROMs");
                 }
                 
@@ -277,6 +341,8 @@ public class MainController
         }
         finally
         {
+            // Re-enable UI updates when cache loading completes
+            _romListView.SetScanningState(false);
             SetLoadingState(false);
         }
     }
@@ -304,15 +370,19 @@ public class MainController
         {
             // Clear existing ROMs for fresh scan
             _romListView.ClearRoms();
+            _scannedRoms = new Dictionary<string, ScannedRom>();
+            
+            // Set scanning state to disable UI updates during scan
+            _romListView.SetScanningState(true);
             
             // Always perform fresh scan (ignore cache)
             progress?.Report("Starting fresh ROM scan...");
             
-            // Step 1: Load MAME XML metadata first
+            // Step 1: Load MAME XML metadata first (run on background thread)
             progress?.Report("Loading MAME metadata...");
-            var mameGames = await _xmlParser.ParseAsync(_settings.MameXmlPath, 
+            var mameGames = await Task.Run(() => _xmlParser.ParseAsync(_settings.MameXmlPath, 
                 new Progress<int>(p => progress?.Report($"Loading MAME XML... ({p}%)")), 
-                cancellationToken);
+                cancellationToken), cancellationToken);
             var metadataLookup = mameGames.ToDictionary(g => g.Name, StringComparer.OrdinalIgnoreCase);
             
             
@@ -320,26 +390,61 @@ public class MainController
             progress?.Report("Scanning ROM repository...");
             
             var scanProgress = new Progress<ScanProgress>(p => 
-                progress?.Report($"{p.Phase} ({p.Percentage}%)"));
-
-            // Real-time ROM callback (ROMs now come with metadata already attached)
-            var romFoundCallback = new Action<ScannedRom>(rom => 
             {
-                _romListView.AddRom(rom);
+                progress?.Report($"{p.Phase} ({p.Percentage}%)");
+                
+                // Update counts based on scanning phase
+                if (p.Phase.Contains("ROM files") || p.Phase.Contains("Scanning ROMs and CHDs"))
+                {
+                    // Update ROM count from ItemsProcessed (which represents ROM count during scanning)
+                    _mainForm?.UpdateRomCount(p.ItemsProcessed);
+                    
+                    // For combined scanning, also update CHD count if we have CHD data
+                    if (p.Phase.Contains("Scanning ROMs and CHDs"))
+                    {
+                        var chdCount = _scannedRoms.Values.Count(r => r.ChdFiles?.Count > 0);
+                        _mainForm?.UpdateChdCount(chdCount);
+                    }
+                }
+                else if (p.Phase == "Scan Complete")
+                {
+                    // Final update with all counts
+                    _mainForm?.UpdateRomCount(p.ItemsProcessed);
+                    _mainForm?.UpdateChdCount(p.TotalChdDirectories); // Use total CHD directories, not ROMs with CHDs
+                }
             });
 
-            _scannedRoms = await _romScanner.ScanRomsAsync(
+            // Silent ROM callback for scanning - no UI updates during scanning
+            var romFoundCallback = new Action<ScannedRom>(rom => 
+            {
+                _romListView.AddRomSilent(rom);
+            });
+
+            _scannedRoms = await Task.Run(() => _romScanner.ScanRomsAsync(
                 _settings.RomRepositoryPath,
                 _settings.CHDRepositoryPath,
                 scanProgress,
-                romFoundCallback,
-                metadataLookup, // Pass metadata for real-time matching
-                cancellationToken);
+                romFoundCallback, // Use silent callback like cache loading
+                metadataLookup,
+                cancellationToken), cancellationToken);
+            
+            // Clear scanning state and trigger final UI update
+            _romListView.SetScanningState(false);
+            
+            // Ensure all ROMs are visible in the UI (this can take time with large collections)
+            progress?.Report($"Updating UI with {_scannedRoms.Count:N0} ROMs... (70%)");
+            _romListView.UpdateRoms(_scannedRoms.Values);
+            
+            // Update status bar counts from scanned ROMs
+            _mainForm?.UpdateRomCount(_scannedRoms.Count);
+            // Note: CHD count is already updated in the scanProgress callback above
+            
+            progress?.Report($"UI update complete (75%)");
 
             // Step 3: Scan destination directory to mark installed ROMs
             if (!string.IsNullOrEmpty(_settings.DestinationPath))
             {
-                progress?.Report("Scanning destination directory...");
+                progress?.Report("Scanning destination directory... (75%)");
                 var destinationCount = await _romScanner.ScanDestinationAsync(
                     _settings.DestinationPath,
                     _scannedRoms,
@@ -349,12 +454,20 @@ public class MainController
                 // Refresh the UI to show destination status
                 _romListView.RefreshDisplay();
                 _destinationRomListView?.UpdateDestinationRoms(_scannedRoms.Values.ToList());
-                progress?.Report($"Found {destinationCount} ROMs in destination directory");
+                
+                // Update installed count in status bar
+                _mainForm?.UpdateInstalledCount(destinationCount);
+                
+                progress?.Report($"Found {destinationCount} ROMs in destination directory (80%)");
+            }
+            else
+            {
+                progress?.Report("Skipping destination scan (no destination path) (75%)");
             }
 
             // Step 4: Save to cache for next time
-            progress?.Report("Saving ROM cache...");
-            await _cacheService.SaveCacheAsync(_scannedRoms, _settings);
+            progress?.Report("Saving ROM cache... (85%)");
+            await _cacheService.SaveCacheAsync(_scannedRoms, _settings, progress);
 
             UpdateStatus($"Scanned {_scannedRoms.Count:N0} ROMs successfully");
 
@@ -376,6 +489,8 @@ public class MainController
         }
         finally
         {
+            // Re-enable UI updates when scanning completes
+            _romListView.SetScanningState(false);
             SetLoadingState(false);
         }
     }
@@ -385,10 +500,86 @@ public class MainController
     /// </summary>
     public void FilterRoms(string filter)
     {
-        _romListView.ApplyFilter(filter);
+        _romListView.ApplyFilter(filter, _settings.ShowBiosAndDevices);
         var stats = _romListView.GetStats();
         UpdateStatus($"Showing {stats.FilteredRoms} of {stats.TotalRoms} ROMs");
     }
+
+    /// <summary>
+    /// Refreshes the current filter with updated settings
+    /// </summary>
+    public void RefreshFilter()
+    {
+        FilterRoms(_romListView.GetCurrentFilter());
+    }
+
+    /// <summary>
+    /// Exports the current ROM selection to a file
+    /// </summary>
+    public async Task ExportSelectionAsync(IEnumerable<ScannedRom> selectedRoms, string filePath)
+    {
+        try
+        {
+            var selection = new RomSelection
+            {
+                Name = $"ROM Selection - {DateTime.Now:yyyy-MM-dd HH:mm}",
+                Description = $"Exported selection containing {selectedRoms.Count()} ROMs",
+                RomNames = selectedRoms.Select(r => r.Name).ToList()
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(selection, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+
+            await File.WriteAllTextAsync(filePath, json);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to export selection: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Imports a ROM selection from a file and selects the matching ROMs
+    /// </summary>
+    public async Task<List<ScannedRom>> ImportSelectionAsync(string filePath)
+    {
+        try
+        {
+            var json = await File.ReadAllTextAsync(filePath);
+            var selection = System.Text.Json.JsonSerializer.Deserialize<RomSelection>(json);
+
+            if (selection == null)
+                throw new InvalidOperationException("Invalid selection file format");
+
+            var importedRoms = new List<ScannedRom>();
+            var allRoms = _romListView.GetAllRoms();
+
+            // Find matching ROMs and select them
+            foreach (var romName in selection.RomNames)
+            {
+                var matchingRom = allRoms.FirstOrDefault(r => 
+                    string.Equals(r.Name, romName, StringComparison.OrdinalIgnoreCase));
+                
+                if (matchingRom != null)
+                {
+                    matchingRom.IsSelected = true;
+                    importedRoms.Add(matchingRom);
+                }
+            }
+
+            // Update the UI to reflect the new selections
+            _romListView.RefreshSelection();
+
+            return importedRoms;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to import selection: {ex.Message}", ex);
+        }
+    }
+
 
     /// <summary>
     /// Selects all visible ROMs
@@ -562,6 +753,10 @@ public class MainController
     {
         var stats = _romListView.GetStats();
         var totalSize = stats.TotalSelectedSize;
+        
+        // Update selected count in status bar
+        _mainForm?.UpdateSelectedCount(stats.SelectedRoms);
+        
         UpdateStatus($"Selected: {stats.SelectedRoms} ROMs, Total Size: {FormatFileSize(totalSize)}");
     }
 
@@ -753,10 +948,10 @@ public class MainController
     /// <summary>
     /// Deletes selected ROMs from the destination directory
     /// </summary>
-    public async Task DeleteSelectedDestinationRomsAsync()
+    public Task DeleteSelectedDestinationRomsAsync()
     {
         if (_destinationRomListView == null || string.IsNullOrEmpty(_settings.DestinationPath))
-            return;
+            return Task.CompletedTask;
 
         try
         {
@@ -764,7 +959,7 @@ public class MainController
             if (!selectedRoms.Any())
             {
                 UpdateStatus("No ROMs selected for deletion");
-                return;
+                return Task.CompletedTask;
             }
 
             // Confirm deletion
@@ -775,7 +970,7 @@ public class MainController
                 MessageBoxIcon.Warning);
 
             if (result != DialogResult.Yes)
-                return;
+                return Task.CompletedTask;
 
             var deletedCount = 0;
             var errors = new List<string>();
@@ -829,6 +1024,7 @@ public class MainController
             MessageBox.Show($"Error deleting ROMs: {ex.Message}", 
                 "Deletion Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+        return Task.CompletedTask;
     }
 }
 

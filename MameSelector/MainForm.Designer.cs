@@ -46,6 +46,9 @@ partial class MainForm
         menuStrip = new MenuStrip();
         fileToolStripMenuItem = new ToolStripMenuItem();
         settingsToolStripMenuItem = new ToolStripMenuItem();
+        toolStripSeparator1 = new ToolStripSeparator();
+        exportSelectionToolStripMenuItem = new ToolStripMenuItem();
+        importSelectionToolStripMenuItem = new ToolStripMenuItem();
         toolStripSeparator3 = new ToolStripSeparator();
         cacheInfoToolStripMenuItem = new ToolStripMenuItem();
         clearCacheToolStripMenuItem = new ToolStripMenuItem();
@@ -59,7 +62,11 @@ partial class MainForm
         copyRomsButton = new Button();
         statusStrip = new StatusStrip();
         statusLabel = new ToolStripStatusLabel();
-        progressBar = new ToolStripProgressBar();
+        romCountLabel = new ToolStripStatusLabel();
+        chdCountLabel = new ToolStripStatusLabel();
+        installedCountLabel = new ToolStripStatusLabel();
+        selectedCountLabel = new ToolStripStatusLabel();
+        progressBar = new MameSelector.UI.CustomProgressBar();
         mainPanel = new Panel();
         mainSplitContainer = new SplitContainer();
         romsSplitContainer = new SplitContainer();
@@ -71,7 +78,9 @@ partial class MainForm
         refreshDestinationButton = new Button();
         deleteDestinationButton = new Button();
         detailsGroupBox = new GroupBox();
+        detailsSplitContainer = new SplitContainer();
         detailsTextBox = new TextBox();
+        debugLogTextBox = new TextBox();
         searchPanel = new Panel();
         clearAllButton = new Button();
         selectAllButton = new Button();
@@ -105,7 +114,7 @@ partial class MainForm
         // 
         // fileToolStripMenuItem
         // 
-        fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { settingsToolStripMenuItem, toolStripSeparator3, cacheInfoToolStripMenuItem, clearCacheToolStripMenuItem, toolStripSeparator4, destinationToolStripMenuItem, toolStripSeparator5, exitToolStripMenuItem });
+        fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { settingsToolStripMenuItem, toolStripSeparator1, exportSelectionToolStripMenuItem, importSelectionToolStripMenuItem, toolStripSeparator3, cacheInfoToolStripMenuItem, clearCacheToolStripMenuItem, toolStripSeparator4, destinationToolStripMenuItem, toolStripSeparator5, exitToolStripMenuItem });
         fileToolStripMenuItem.Name = "fileToolStripMenuItem";
         fileToolStripMenuItem.Size = new Size(37, 20);
         fileToolStripMenuItem.Text = "&File";
@@ -117,6 +126,28 @@ partial class MainForm
         settingsToolStripMenuItem.Size = new Size(116, 22);
         settingsToolStripMenuItem.Text = "&Settings";
         settingsToolStripMenuItem.Click += SettingsToolStripMenuItem_Click;
+
+        // 
+        // toolStripSeparator1
+        // 
+        toolStripSeparator1.Name = "toolStripSeparator1";
+        toolStripSeparator1.Size = new Size(116, 6);
+
+        // 
+        // exportSelectionToolStripMenuItem
+        // 
+        exportSelectionToolStripMenuItem.Name = "exportSelectionToolStripMenuItem";
+        exportSelectionToolStripMenuItem.Size = new Size(116, 22);
+        exportSelectionToolStripMenuItem.Text = "&Export Selection";
+        exportSelectionToolStripMenuItem.Click += ExportSelectionToolStripMenuItem_Click;
+
+        // 
+        // importSelectionToolStripMenuItem
+        // 
+        importSelectionToolStripMenuItem.Name = "importSelectionToolStripMenuItem";
+        importSelectionToolStripMenuItem.Size = new Size(116, 22);
+        importSelectionToolStripMenuItem.Text = "&Import Selection";
+        importSelectionToolStripMenuItem.Click += ImportSelectionToolStripMenuItem_Click;
 
         // 
         // toolStripSeparator3
@@ -193,25 +224,66 @@ partial class MainForm
         // 
         // statusStrip
         // 
-        statusStrip.Items.AddRange(new ToolStripItem[] { statusLabel, progressBar });
+        statusStrip.Items.AddRange(new ToolStripItem[] { statusLabel, romCountLabel, chdCountLabel, installedCountLabel, selectedCountLabel, progressBar });
         statusStrip.Location = new Point(0, 878);
         statusStrip.Name = "statusStrip";
         statusStrip.Size = new Size(2200, 22);
         statusStrip.TabIndex = 2;
+        statusStrip.Height = 16;
 
         // 
         // statusLabel
         // 
         statusLabel.Name = "statusLabel";
         statusLabel.Size = new Size(39, 17);
+        statusLabel.Spring = true;
         statusLabel.Text = "Ready";
+        statusLabel.TextAlign = ContentAlignment.MiddleLeft;
+
+        // 
+        // romCountLabel
+        // 
+        romCountLabel.Name = "romCountLabel";
+        romCountLabel.Size = new Size(80, 17);
+        romCountLabel.Text = "ROMs: 0";
+        romCountLabel.TextAlign = ContentAlignment.MiddleLeft;
+
+        // 
+        // chdCountLabel
+        // 
+        chdCountLabel.Name = "chdCountLabel";
+        chdCountLabel.Size = new Size(80, 17);
+        chdCountLabel.Text = "CHDs: 0";
+        chdCountLabel.TextAlign = ContentAlignment.MiddleLeft;
+
+        // 
+        // installedCountLabel
+        // 
+        installedCountLabel.Name = "installedCountLabel";
+        installedCountLabel.Size = new Size(100, 17);
+        installedCountLabel.Text = "Installed: 0";
+        installedCountLabel.TextAlign = ContentAlignment.MiddleLeft;
+
+        // 
+        // selectedCountLabel
+        // 
+        selectedCountLabel.Name = "selectedCountLabel";
+        selectedCountLabel.Size = new Size(100, 17);
+        selectedCountLabel.Text = "Selected: 0";
+        selectedCountLabel.TextAlign = ContentAlignment.MiddleLeft;
 
         // 
         // progressBar
         // 
         progressBar.Name = "progressBar";
-        progressBar.Size = new Size(200, 16);
-        progressBar.Visible = false;
+        progressBar.Size = new Size(150, 6);
+        progressBar.Height = 10;
+        progressBar.AutoSize = false;
+        progressBar.Margin = new Padding(0, 2, 0, 2);
+        progressBar.Visible = true;
+        progressBar.Style = ProgressBarStyle.Continuous;
+        progressBar.Alignment = ToolStripItemAlignment.Right;
+        progressBar.Value = 0;
 
         // 
         // mainPanel
@@ -278,28 +350,56 @@ partial class MainForm
         // 
         // detailsGroupBox
         // 
-        detailsGroupBox.Controls.Add(detailsTextBox);
+        detailsGroupBox.Controls.Add(detailsSplitContainer);
         detailsGroupBox.Dock = DockStyle.Fill;
         detailsGroupBox.Location = new Point(0, 0);
         detailsGroupBox.Name = "detailsGroupBox";
         detailsGroupBox.Size = new Size(1800, 329);
         detailsGroupBox.TabIndex = 2;
         detailsGroupBox.TabStop = false;
-        detailsGroupBox.Text = "ROM Details";
+        detailsGroupBox.Text = "ROM Details & Debug Log";
+
+        // 
+        // detailsSplitContainer
+        // 
+        detailsSplitContainer.Dock = DockStyle.Fill;
+        detailsSplitContainer.Location = new Point(3, 19);
+        detailsSplitContainer.Name = "detailsSplitContainer";
+        detailsSplitContainer.Orientation = Orientation.Vertical;
+        detailsSplitContainer.Panel1.Controls.Add(detailsTextBox);
+        detailsSplitContainer.Panel2.Controls.Add(debugLogTextBox);
+        detailsSplitContainer.Size = new Size(1794, 307);
+        detailsSplitContainer.SplitterDistance = 897;
+        detailsSplitContainer.TabIndex = 0;
+        detailsSplitContainer.Text = "splitContainer1";
 
         // 
         // detailsTextBox
         // 
         detailsTextBox.Dock = DockStyle.Fill;
         detailsTextBox.Font = new Font("Consolas", 9F, FontStyle.Regular, GraphicsUnit.Point);
-        detailsTextBox.Location = new Point(3, 19);
+        detailsTextBox.Location = new Point(0, 0);
         detailsTextBox.Multiline = true;
         detailsTextBox.Name = "detailsTextBox";
         detailsTextBox.ReadOnly = true;
         detailsTextBox.ScrollBars = ScrollBars.Vertical;
-        detailsTextBox.Size = new Size(1794, 307);
+        detailsTextBox.Size = new Size(897, 307);
         detailsTextBox.TabIndex = 0;
         detailsTextBox.Text = "Select a ROM to view details...";
+
+        // 
+        // debugLogTextBox
+        // 
+        debugLogTextBox.Dock = DockStyle.Fill;
+        debugLogTextBox.Font = new Font("Consolas", 8F, FontStyle.Regular, GraphicsUnit.Point);
+        debugLogTextBox.Location = new Point(0, 0);
+        debugLogTextBox.Multiline = true;
+        debugLogTextBox.Name = "debugLogTextBox";
+        debugLogTextBox.ReadOnly = true;
+        debugLogTextBox.ScrollBars = ScrollBars.Vertical;
+        debugLogTextBox.Size = new Size(897, 307);
+        debugLogTextBox.TabIndex = 0;
+        debugLogTextBox.Text = "Debug Log:\r\n";
 
         // 
         // destinationListView
@@ -520,6 +620,9 @@ partial class MainForm
     private MenuStrip menuStrip;
     private ToolStripMenuItem fileToolStripMenuItem;
     private ToolStripMenuItem settingsToolStripMenuItem;
+    private ToolStripSeparator toolStripSeparator1;
+    private ToolStripMenuItem exportSelectionToolStripMenuItem;
+    private ToolStripMenuItem importSelectionToolStripMenuItem;
     private ToolStripSeparator toolStripSeparator3;
     private ToolStripMenuItem cacheInfoToolStripMenuItem;
     private ToolStripMenuItem clearCacheToolStripMenuItem;
@@ -534,7 +637,11 @@ partial class MainForm
     private Button copyRomsButton;
     private StatusStrip statusStrip;
     private ToolStripStatusLabel statusLabel;
-    private ToolStripProgressBar progressBar;
+    private ToolStripStatusLabel romCountLabel;
+    private ToolStripStatusLabel chdCountLabel;
+    private ToolStripStatusLabel installedCountLabel;
+    private ToolStripStatusLabel selectedCountLabel;
+    private MameSelector.UI.CustomProgressBar progressBar;
     private Panel mainPanel;
     private SplitContainer mainSplitContainer;
     private SplitContainer romsSplitContainer;
@@ -546,7 +653,9 @@ partial class MainForm
     private Button refreshDestinationButton;
     private Button deleteDestinationButton;
     private GroupBox detailsGroupBox;
+    private SplitContainer detailsSplitContainer;
     private TextBox detailsTextBox;
+    private TextBox debugLogTextBox;
     private Panel searchPanel;
     private Button clearAllButton;
     private Button selectAllButton;

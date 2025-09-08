@@ -11,12 +11,16 @@ public class ScannedRom
     public List<string> ChdFiles { get; set; } = new();
     public long TotalChdSize { get; set; }
     public DateTime LastModified { get; set; }
-    public List<string> InternalFiles { get; set; } = new();
     
     /// <summary>
     /// Whether this ROM exists in the destination directory
     /// </summary>
     public bool InDestination { get; set; }
+    
+    /// <summary>
+    /// Whether this ROM is currently selected in the UI
+    /// </summary>
+    public bool IsSelected { get; set; }
     
     /// <summary>
     /// Associated MAME metadata (populated after XML matching)
@@ -62,4 +66,14 @@ public class ScannedRom
     /// Whether this ROM is a clone (has metadata and is clone)
     /// </summary>
     public bool IsClone => Metadata?.IsClone ?? false;
+    
+    /// <summary>
+    /// Whether this ROM is a BIOS file (has metadata and is BIOS)
+    /// </summary>
+    public bool IsBios => Metadata?.IsBios ?? false;
+    
+    /// <summary>
+    /// Whether this ROM is a device file (has metadata and is device)
+    /// </summary>
+    public bool IsDevice => Metadata?.IsDevice ?? false;
 }

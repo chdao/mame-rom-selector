@@ -13,6 +13,83 @@ public partial class MainForm : Form
     private readonly DestinationRomListView _destinationRomListView;
     private CancellationTokenSource? _cancellationTokenSource;
     private bool _isCopying = false;
+    private string _lastDebugMessage = string.Empty;
+
+    /// <summary>
+    /// Logs a debug message to the debug log text box (only if different from last message)
+    /// </summary>
+    public void LogDebug(string message)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(new Action<string>(LogDebug), message);
+            return;
+        }
+
+        // Only log if message is different from the last one to avoid spam
+        if (message == _lastDebugMessage)
+            return;
+
+        _lastDebugMessage = message;
+        var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+        var logMessage = $"[{timestamp}] {message}\r\n";
+        
+        debugLogTextBox.AppendText(logMessage);
+        debugLogTextBox.SelectionStart = debugLogTextBox.Text.Length;
+        debugLogTextBox.ScrollToCaret();
+    }
+
+    /// <summary>
+    /// Updates the ROM count in the status bar
+    /// </summary>
+    public void UpdateRomCount(int count)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(new Action<int>(UpdateRomCount), count);
+            return;
+        }
+        romCountLabel.Text = $"ROMs: {count:N0}";
+    }
+
+    /// <summary>
+    /// Updates the CHD count in the status bar
+    /// </summary>
+    public void UpdateChdCount(int count)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(new Action<int>(UpdateChdCount), count);
+            return;
+        }
+        chdCountLabel.Text = $"CHDs: {count:N0}";
+    }
+
+    /// <summary>
+    /// Updates the installed ROM count in the status bar
+    /// </summary>
+    public void UpdateInstalledCount(int count)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(new Action<int>(UpdateInstalledCount), count);
+            return;
+        }
+        installedCountLabel.Text = $"Installed: {count:N0}";
+    }
+
+    /// <summary>
+    /// Updates the selected ROM count in the status bar
+    /// </summary>
+    public void UpdateSelectedCount(int count)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(new Action<int>(UpdateSelectedCount), count);
+            return;
+        }
+        selectedCountLabel.Text = $"Selected: {count:N0}";
+    }
 
     public MainForm()
     {
@@ -49,6 +126,7 @@ public partial class MainForm : Form
         
         // Initialize controller
         _controller = new MainController(settingsManager, romScanner, metadataService, cacheService, xmlParser, copyService, _romListView);
+        _controller.SetMainForm(this);
         _controller.SetDestinationListView(_destinationRomListView);
         
         // Wire up events
@@ -169,6 +247,65 @@ public partial class MainForm : Form
         ShowSettingsDialog();
     }
 
+    private async void ExportSelectionToolStripMenuItem_Click(object sender, EventArgs e)
+    {
+        try
+        {
+            var selectedRoms = _romListView.GetSelectedRoms();
+            if (!selectedRoms.Any())
+            {
+                MessageBox.Show("No ROMs are currently selected. Please select some ROMs first.", 
+                    "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using var saveDialog = new SaveFileDialog
+            {
+                Title = "Export ROM Selection",
+                Filter = "ROM Selection Files (*.romsel)|*.romsel|JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+                DefaultExt = "romsel",
+                FileName = $"ROM_Selection_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.romsel"
+            };
+
+            if (saveDialog.ShowDialog() == DialogResult.OK)
+            {
+                await _controller.ExportSelectionAsync(selectedRoms, saveDialog.FileName);
+                MessageBox.Show($"Successfully exported {selectedRoms.Count} ROMs to:\n{saveDialog.FileName}", 
+                    "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error exporting selection: {ex.Message}", "Export Error", 
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private async void ImportSelectionToolStripMenuItem_Click(object sender, EventArgs e)
+    {
+        try
+        {
+            using var openDialog = new OpenFileDialog
+            {
+                Title = "Import ROM Selection",
+                Filter = "ROM Selection Files (*.romsel)|*.romsel|JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+                DefaultExt = "romsel"
+            };
+
+            if (openDialog.ShowDialog() == DialogResult.OK)
+            {
+                var importedRoms = await _controller.ImportSelectionAsync(openDialog.FileName);
+                MessageBox.Show($"Successfully imported {importedRoms.Count} ROMs from:\n{openDialog.FileName}", 
+                    "Import Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error importing selection: {ex.Message}", "Import Error", 
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     private void ExitToolStripMenuItem_Click(object sender, EventArgs e)
     {
         Close();
@@ -275,12 +412,11 @@ public partial class MainForm : Form
             return;
         }
 
-        progressBar.Visible = e.IsLoading;
         scanRomsButton.Enabled = !e.IsLoading;
         
         if (!e.IsLoading)
         {
-            progressBar.Value = 0;
+            ResetProgress();
             UpdateUIFromSettings();
         }
     }
@@ -358,6 +494,7 @@ public partial class MainForm : Form
         details.Add($"Description: {rom.DisplayName}");
         details.Add($"Manufacturer: {rom.DisplayManufacturer}");
         details.Add($"Year: {rom.DisplayYear}");
+        details.Add($"Type: {GetRomType(rom)}");
         details.Add($"Status: {(rom.InDestination ? "Installed" : "Not Installed")}");
         details.Add("");
         
@@ -382,16 +519,18 @@ public partial class MainForm : Form
             details.Add($"Size: {FormatFileSize(rom.TotalSize)}");
         }
         
-        // Metadata info - one line per item
-        details.Add("");
+        // Metadata info - only show meaningful information
         if (rom.HasMetadata && rom.Metadata != null)
         {
-            details.Add($"Clone Of: {(rom.IsClone ? rom.Metadata.CloneOf ?? "Unknown" : "Parent ROM")}");
-            details.Add($"Category: {rom.Metadata.Category ?? "Unknown"}");
-        }
-        else
-        {
-            details.Add("MAME Metadata: Not available");
+            details.Add("");
+            if (rom.IsClone && !string.IsNullOrEmpty(rom.Metadata.CloneOf))
+            {
+                details.Add($"Clone Of: {rom.Metadata.CloneOf}");
+            }
+            if (!string.IsNullOrEmpty(rom.Metadata.Category))
+            {
+                details.Add($"Category: {rom.Metadata.Category}");
+            }
         }
 
         detailsTextBox.Text = string.Join(Environment.NewLine, details);
@@ -417,35 +556,32 @@ public partial class MainForm : Form
 
         try
         {
-            // Show and reset progress bar
-            progressBar.Visible = true;
-            progressBar.Value = 0;
+            StartProgress("Loading ROM cache...");
 
             var progress = new Progress<string>(message =>
             {
-                if (InvokeRequired)
+                // Extract percentage from message if present
+                var match = System.Text.RegularExpressions.Regex.Match(message, @"\((\d+)%\)");
+                if (match.Success && int.TryParse(match.Groups[1].Value, out int percentage))
                 {
-                    Invoke(new Action<string>(msg => statusLabel.Text = msg), message);
+                    // Remove percentage from status text, let progress bar show it
+                    var cleanMessage = System.Text.RegularExpressions.Regex.Replace(message, @"\s*\(\d+%\)", "");
+                    UpdateProgress(cleanMessage, percentage);
                 }
                 else
                 {
-                    statusLabel.Text = message;
+                    UpdateProgress(message);
                 }
             });
 
             await _controller.AutoLoadRomsAsync(progress);
+            CompleteProgress("ROM cache loaded successfully");
         }
         catch (Exception ex)
         {
             MessageBox.Show($"Error loading ROM cache: {ex.Message}", "Error", 
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
-            statusLabel.Text = "Cache loading failed";
-        }
-        finally
-        {
-            // Hide progress bar when done
-            progressBar.Visible = false;
-            progressBar.Value = 0;
+            UpdateProgress("Cache loading failed");
         }
     }
 
@@ -462,40 +598,38 @@ public partial class MainForm : Form
 
         try
         {
-            
-            // Show and reset progress bar
-            progressBar.Visible = true;
-            progressBar.Value = 0;
+            StartProgress("Starting ROM scan...");
 
             var progress = new Progress<string>(message =>
             {
-                if (InvokeRequired)
+                // Debug: Log the message to debug window
+                LogDebug($"Progress: {message}");
+                
+                // Debug: Always update progress to see if callback is working
+                UpdateProgress(message);
+                
+                // Extract percentage from message if present
+                var match = System.Text.RegularExpressions.Regex.Match(message, @"\((\d+)%\)");
+                if (match.Success && int.TryParse(match.Groups[1].Value, out int percentage))
                 {
-                    Invoke(new Action<string>(msg => statusLabel.Text = msg), message);
-                }
-                else
-                {
-                    statusLabel.Text = message;
+                    // Remove percentage from status text, let progress bar show it
+                    var cleanMessage = System.Text.RegularExpressions.Regex.Replace(message, @"\s*\(\d+%\)", "");
+                    UpdateProgress(cleanMessage, percentage);
                 }
             });
 
             await _controller.ScanAndLoadRomsAsync(progress, _cancellationTokenSource.Token);
+            CompleteProgress("ROM scanning completed successfully");
         }
         catch (OperationCanceledException)
         {
-            statusLabel.Text = "ROM scanning cancelled";
+            UpdateProgress("ROM scanning cancelled");
         }
         catch (Exception ex)
         {
             MessageBox.Show($"Error scanning ROMs: {ex.Message}", "Error", 
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
-            statusLabel.Text = "ROM scanning failed";
-        }
-        finally
-        {
-            // Hide progress bar when done
-            progressBar.Visible = false;
-            progressBar.Value = 0;
+            UpdateProgress("ROM scanning failed");
         }
     }
 
@@ -573,12 +707,34 @@ public partial class MainForm : Form
 
     private async void RefreshDestinationButton_Click(object? sender, EventArgs e)
     {
-        await _controller.RefreshDestinationListAsync();
+        try
+        {
+            StartProgress("Refreshing destination list...");
+            await _controller.RefreshDestinationListAsync();
+            CompleteProgress("Destination list refreshed");
+        }
+        catch (Exception ex)
+        {
+            UpdateProgress("Failed to refresh destination list");
+            MessageBox.Show($"Error refreshing destination list: {ex.Message}", "Error", 
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private async void DeleteDestinationButton_Click(object? sender, EventArgs e)
     {
-        await _controller.DeleteSelectedDestinationRomsAsync();
+        try
+        {
+            StartProgress("Deleting selected ROMs...");
+            await _controller.DeleteSelectedDestinationRomsAsync();
+            CompleteProgress("Selected ROMs deleted");
+        }
+        catch (Exception ex)
+        {
+            UpdateProgress("Failed to delete ROMs");
+            MessageBox.Show($"Error deleting ROMs: {ex.Message}", "Error", 
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void OnFormResize(object? sender, EventArgs e)
@@ -586,6 +742,101 @@ public partial class MainForm : Form
         // Adjust column widths when the form is resized
         _romListView.AdjustColumnWidths();
         _destinationRomListView.AdjustColumnWidths();
+    }
+
+    /// <summary>
+    /// Centralized progress reporting system
+    /// </summary>
+    public void UpdateProgress(string message, int percentage = -1)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(new Action<string, int>(UpdateProgress), message, percentage);
+            return;
+        }
+
+        // Update status label
+        statusLabel.Text = message;
+
+        // Update progress bar if percentage is provided
+        if (percentage >= 0)
+        {
+            progressBar.Value = Math.Min(Math.Max(percentage, 0), 100);
+            progressBar.SetText($"{percentage}%");
+        }
+        else
+        {
+            progressBar.SetText("");
+        }
+    }
+
+    /// <summary>
+    /// Reset progress bar to 0 and clear status
+    /// </summary>
+    public void ResetProgress()
+    {
+        if (InvokeRequired)
+        {
+            Invoke(new Action(ResetProgress));
+            return;
+        }
+
+        statusLabel.Text = "Ready";
+        progressBar.Value = 0;
+        progressBar.SetText("");
+    }
+
+    /// <summary>
+    /// Show progress bar and set initial message
+    /// </summary>
+    public void StartProgress(string message)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(new Action<string>(StartProgress), message);
+            return;
+        }
+
+        statusLabel.Text = message;
+        progressBar.Value = 0;
+        progressBar.SetText("");
+        progressBar.Visible = true;
+    }
+
+    /// <summary>
+    /// Hide progress bar and show completion message
+    /// </summary>
+    public void CompleteProgress(string message = "Ready")
+    {
+        if (InvokeRequired)
+        {
+            Invoke(new Action<string>(CompleteProgress), message);
+            return;
+        }
+
+        statusLabel.Text = "Done";
+        progressBar.Value = 100;
+        progressBar.SetText("100%");
+        
+        // Clear progress bar and reset after a short delay
+        Task.Delay(1500).ContinueWith(_ => 
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => 
+                {
+                    progressBar.Value = 0;
+                    progressBar.SetText("");
+                    statusLabel.Text = message;
+                }));
+            }
+            else
+            {
+                progressBar.Value = 0;
+                progressBar.SetText("");
+                statusLabel.Text = message;
+            }
+        });
     }
 
     private void OnSplitterMoved(object? sender, SplitterEventArgs e)
@@ -626,29 +877,20 @@ public partial class MainForm : Form
                 }
             }
 
-            // Show progress bar
-            progressBar.Visible = true;
-            progressBar.Value = 0;
+            StartProgress("Starting copy operation...");
 
             // Create progress reporter
             var progress = new Progress<CopyProgress>(copyProgress =>
             {
-                if (InvokeRequired)
-                {
-                    Invoke(new Action<CopyProgress>(p => UpdateCopyProgress(p)), copyProgress);
-                }
-                else
-                {
-                    UpdateCopyProgress(copyProgress);
-                }
+                // Remove percentage from status text, let progress bar show it
+                var cleanMessage = $"{copyProgress.Phase} - {copyProgress.RomsCopied}/{copyProgress.TotalRoms} ROMs";
+                UpdateProgress(cleanMessage, copyProgress.Percentage);
             });
 
             // Perform copy operation
             var result = await _controller.CopySelectedRomsAsync(progress);
 
-            // Hide progress bar
-            progressBar.Visible = false;
-            progressBar.Value = 0;
+            CompleteProgress("Copy operation completed");
 
             // Show result
             var message = $"Copy operation completed!\n\n" +
@@ -665,8 +907,7 @@ public partial class MainForm : Form
         }
         catch (Exception ex)
         {
-            progressBar.Visible = false;
-            progressBar.Value = 0;
+            UpdateProgress("Copy operation failed");
             MessageBox.Show($"Error copying ROMs: {ex.Message}", "Copy Error", 
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
@@ -676,10 +917,14 @@ public partial class MainForm : Form
         }
     }
 
-    private void UpdateCopyProgress(CopyProgress progress)
+
+    private string GetRomType(ScannedRom rom)
     {
-        statusLabel.Text = progress.Phase;
-        progressBar.Value = Math.Min(Math.Max(progress.Percentage, 0), 100);
+        if (rom.IsBios)
+            return "BIOS";
+        if (rom.IsDevice)
+            return "Device";
+        return "Machine";
     }
 
     #endregion

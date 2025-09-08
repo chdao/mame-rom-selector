@@ -1,5 +1,4 @@
 using MameSelector.Models;
-using System.IO.Compression;
 
 namespace MameSelector.Services;
 
@@ -41,126 +40,68 @@ public class RomScanner
         if (!Directory.Exists(romRepositoryPath))
             throw new DirectoryNotFoundException($"ROM repository not found: {romRepositoryPath}");
 
-        // Scan ROM files
-        await ScanRomFilesAsync(romRepositoryPath, scannedRoms, progress, romFoundCallback, metadataLookup, cancellationToken);
-        
-        // Scan CHD files if path provided
+        // Step 1: Pre-scan CHD directories to create a lookup dictionary
+        Dictionary<string, ChdInfo>? chdLookup = null;
+        var totalChdDirectories = 0;
         if (!string.IsNullOrEmpty(chdRepositoryPath) && Directory.Exists(chdRepositoryPath))
         {
-            await ScanChdFilesAsync(chdRepositoryPath, scannedRoms, progress, romFoundCallback, metadataLookup, cancellationToken);
+            progress?.Report(new ScanProgress { Phase = "Scanning CHD directories...", Percentage = 0 });
+            chdLookup = await ScanChdDirectoriesAsync(chdRepositoryPath, progress, cancellationToken);
+            totalChdDirectories = chdLookup.Count;
+            progress?.Report(new ScanProgress { Phase = $"Found {totalChdDirectories} CHD directories", Percentage = 0 });
         }
+        else
+        {
+            progress?.Report(new ScanProgress { Phase = "CHD scanning skipped (no CHD path)", Percentage = 0 });
+        }
+        
+        // Step 2: Scan ROM files and immediately match with CHDs
+        progress?.Report(new ScanProgress { Phase = "Scanning ROM files...", Percentage = 0 });
+        await ScanRomFilesAsync(romRepositoryPath, scannedRoms, chdLookup, 
+            progress, metadataLookup, cancellationToken);
 
-        progress?.Report(new ScanProgress { Phase = "Scan Complete", Percentage = 100, ItemsProcessed = scannedRoms.Count });
+        // Final progress report with accurate counts
+        var finalChdCount = scannedRoms.Values.Count(r => r.ChdFiles?.Count > 0);
+        var totalChdFiles = scannedRoms.Values.Sum(r => r.ChdFiles?.Count ?? 0);
+        
+        // Debug: Log the different counts
+        progress?.Report(new ScanProgress { 
+            Phase = $"Scan Complete - ROMs with CHDs: {finalChdCount}, Total CHD directories: {totalChdDirectories}, Total CHD files: {totalChdFiles}", 
+            Percentage = 100, 
+            ItemsProcessed = scannedRoms.Count,
+            ChdCount = finalChdCount,
+            TotalChdDirectories = totalChdDirectories
+        });
         return scannedRoms;
     }
 
-    /// <summary>
-    /// Scans ROM archive files in the repository
-    /// </summary>
-    private async Task ScanRomFilesAsync(
-        string romPath, 
-        Dictionary<string, ScannedRom> scannedRoms,
-        IProgress<ScanProgress>? progress,
-        Action<ScannedRom>? romFoundCallback,
-        Dictionary<string, MameGame>? metadataLookup,
-        CancellationToken cancellationToken)
-    {
-        progress?.Report(new ScanProgress { Phase = "Scanning ROM files...", Percentage = 0 });
-
-        var romFiles = Directory.EnumerateFiles(romPath, "*.*", SearchOption.TopDirectoryOnly)
-            .Where(f => _validRomExtensions.Contains(Path.GetExtension(f)))
-            .ToList();
-
-        var totalFiles = romFiles.Count;
-        var processedFiles = 0;
-
-        await Task.Run(() =>
-        {
-            Parallel.ForEach(romFiles, new ParallelOptions 
-            { 
-                CancellationToken = cancellationToken,
-                MaxDegreeOfParallelism = Environment.ProcessorCount
-            }, romFile =>
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var romName = Path.GetFileNameWithoutExtension(romFile);
-                var fileInfo = new FileInfo(romFile);
-                
-                // Debug output for every ROM found
-                
-                var scannedRom = new ScannedRom
-                {
-                    Name = romName,
-                    RomFilePath = romFile,
-                    RomFileSize = fileInfo.Length,
-                    LastModified = fileInfo.LastWriteTime
-                };
-
-                // Try to get internal file list for ZIP files (optional, for detailed info)
-                if (Path.GetExtension(romFile).Equals(".zip", StringComparison.OrdinalIgnoreCase))
-                {
-                    try
-                    {
-                        scannedRom.InternalFiles = GetZipFileList(romFile);
-                    }
-                    catch
-                    {
-                        // If we can't read the ZIP, just continue - the ROM might still be valid
-                        scannedRom.InternalFiles = new List<string>();
-                    }
-                }
-
-                // Match metadata in real-time if lookup is available
-                if (metadataLookup != null)
-                {
-                    MatchMetadata(scannedRom, metadataLookup);
-                    
-                    // Debug output for metadata matching result
-                    if (scannedRom.HasMetadata)
-                    {
-                    }
-                }
-
-                lock (scannedRoms)
-                {
-                    scannedRoms[romName] = scannedRom;
-                }
-
-                // Notify callback for real-time updates
-                romFoundCallback?.Invoke(scannedRom);
-
-                var processed = Interlocked.Increment(ref processedFiles);
-                if (processed % 100 == 0 || processed == totalFiles) // Update progress every 100 files
-                {
-                    var percentage = (int)((double)processed / totalFiles * 50); // ROM scanning is 50% of total
-                    progress?.Report(new ScanProgress 
-                    { 
-                        Phase = $"Scanning ROM files... ({processed}/{totalFiles})", 
-                        Percentage = percentage,
-                        ItemsProcessed = processed
-                    });
-                }
-            });
-        });
-    }
 
     /// <summary>
-    /// Scans CHD files in the repository
+    /// Pre-scans CHD directories to create a lookup dictionary
     /// </summary>
-    private async Task ScanChdFilesAsync(
+    private async Task<Dictionary<string, ChdInfo>> ScanChdDirectoriesAsync(
         string chdPath,
-        Dictionary<string, ScannedRom> scannedRoms,
         IProgress<ScanProgress>? progress,
-        Action<ScannedRom>? romFoundCallback,
-        Dictionary<string, MameGame>? metadataLookup,
         CancellationToken cancellationToken)
     {
-        progress?.Report(new ScanProgress { Phase = "Scanning CHD files...", Percentage = 50 });
-
-        var chdDirectories = Directory.EnumerateDirectories(chdPath, "*", SearchOption.TopDirectoryOnly).ToList();
+        var chdLookup = new Dictionary<string, ChdInfo>(StringComparer.OrdinalIgnoreCase);
+        
+        // Run directory enumeration on background thread to avoid blocking UI
+        var chdDirectories = await Task.Run(() => 
+            Directory.EnumerateDirectories(chdPath, "*", SearchOption.TopDirectoryOnly).ToList(), 
+            cancellationToken);
+        
         var totalDirs = chdDirectories.Count;
         var processedDirs = 0;
+        
+        progress?.Report(new ScanProgress { Phase = $"Found {totalDirs} CHD directories to scan", Percentage = 0 });
+        
+        // Debug: Log some sample directory names
+        if (totalDirs > 0)
+        {
+            var sampleDirs = chdDirectories.Take(5).Select(d => Path.GetFileName(d)).ToList();
+            progress?.Report(new ScanProgress { Phase = $"Sample CHD dirs: {string.Join(", ", sampleDirs)}", Percentage = 0 });
+        }
 
         await Task.Run(() =>
         {
@@ -177,62 +118,136 @@ public class RomScanner
 
                 if (chdFiles.Length > 0)
                 {
-                    lock (scannedRoms)
+                    var chdInfo = new ChdInfo
                     {
-                        if (scannedRoms.TryGetValue(dirName, out var existingRom))
-                        {
-                            // Add CHD info to existing ROM
-                            existingRom.ChdFiles = chdFiles.ToList();
-                            existingRom.TotalChdSize = chdFiles.Sum(f => new FileInfo(f).Length);
+                        ChdFiles = chdFiles.ToList(),
+                        TotalSize = chdFiles.Sum(f => new FileInfo(f).Length)
+                    };
 
-                            // Match metadata in real-time if lookup is available
-                            if (metadataLookup != null)
-                            {
-                                MatchMetadata(existingRom, metadataLookup);
-                            }
-
-                            // Notify callback for ROM update (CHD added)
-                            romFoundCallback?.Invoke(existingRom);
-                        }
-                        // If no existing ROM file found, we don't create CHD-only entries
-                        // CHDs without corresponding ROM files are ignored
+                    lock (chdLookup)
+                    {
+                        chdLookup[dirName] = chdInfo;
                     }
                 }
 
                 var processed = Interlocked.Increment(ref processedDirs);
-                if (processed % 50 == 0 || processed == totalDirs) // Update progress every 50 directories
+                if (processed % 50 == 0 || processed == totalDirs)
                 {
-                    var percentage = 50 + (int)((double)processed / totalDirs * 50); // CHD scanning is remaining 50%
+                    var percentage = (int)((double)processed / totalDirs * 100);
                     progress?.Report(new ScanProgress 
                     { 
-                        Phase = $"Scanning CHD files... ({processed}/{totalDirs})", 
+                        Phase = $"Scanning CHD directories... ({processed}/{totalDirs})", 
                         Percentage = percentage,
                         ItemsProcessed = processed
                     });
                 }
             });
         });
+
+        progress?.Report(new ScanProgress { Phase = $"CHD directory scan complete: {chdLookup.Count} directories with CHD files", Percentage = 100 });
+        return chdLookup;
     }
 
     /// <summary>
-    /// Gets the list of files inside a ZIP archive
+    /// Scans ROM archive files in the repository
     /// </summary>
-    private List<string> GetZipFileList(string zipPath)
+    private async Task ScanRomFilesAsync(
+        string romPath, 
+        Dictionary<string, ScannedRom> scannedRoms,
+        Dictionary<string, ChdInfo>? chdLookup,
+        IProgress<ScanProgress>? progress,
+        Dictionary<string, MameGame>? metadataLookup,
+        CancellationToken cancellationToken)
     {
-        var files = new List<string>();
-        
-        try
+        progress?.Report(new ScanProgress { Phase = "Listing ROM files...", Percentage = 0 });
+
+        // Use DirectoryInfo.GetFiles() to get FileInfo objects directly - much more efficient!
+        // Run this on a background thread to avoid blocking the UI
+        var romFileInfos = await Task.Run(() =>
         {
-            using var archive = ZipFile.OpenRead(zipPath);
-            files.AddRange(archive.Entries.Select(entry => entry.Name));
-        }
-        catch
-        {
-            // Return empty list if ZIP can't be read
-        }
+            var directoryInfo = new DirectoryInfo(romPath);
+            return directoryInfo.GetFiles("*.*", SearchOption.TopDirectoryOnly)
+                .Where(f => _validRomExtensions.Contains(f.Extension))
+                .ToList();
+        }, cancellationToken);
+
+        progress?.Report(new ScanProgress { Phase = "Scanning ROM files...", Percentage = 0 });
+
+        var totalFiles = romFileInfos.Count;
+
+        // Process ROMs in background - no real-time UI updates needed since scanning is fast
+        const int batchSize = 100; // Smaller batches for progress reporting
         
-        return files;
+        // Process ROMs in background
+        await Task.Run(() =>
+        {
+            for (int i = 0; i < romFileInfos.Count; i += batchSize)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                
+                var batch = romFileInfos.Skip(i).Take(batchSize);
+                var batchResults = new List<ScannedRom>(batchSize);
+                
+                // Process batch in parallel
+                Parallel.ForEach(batch, new ParallelOptions 
+                { 
+                    CancellationToken = cancellationToken,
+                    MaxDegreeOfParallelism = Environment.ProcessorCount
+                }, fileInfo =>
+                {
+                    var romName = Path.GetFileNameWithoutExtension(fileInfo.Name);
+                    
+                    var scannedRom = new ScannedRom
+                    {
+                        Name = romName,
+                        RomFilePath = fileInfo.FullName,
+                        RomFileSize = fileInfo.Length,
+                        LastModified = fileInfo.LastWriteTime
+                    };
+
+                    // Immediately match CHD files if available
+                    if (chdLookup != null && chdLookup.TryGetValue(romName, out var chdInfo))
+                    {
+                        scannedRom.ChdFiles = chdInfo.ChdFiles;
+                        scannedRom.TotalChdSize = chdInfo.TotalSize;
+                    }
+
+                    // Match metadata in real-time if lookup is available
+                    if (metadataLookup != null)
+                    {
+                        MatchMetadata(scannedRom, metadataLookup);
+                    }
+
+                    // Use thread-local collection to reduce lock contention
+                    lock (batchResults)
+                    {
+                        batchResults.Add(scannedRom);
+                    }
+                });
+                
+                // Add all batch results to main collection in one lock operation
+                lock (scannedRoms)
+                {
+                    foreach (var rom in batchResults)
+                    {
+                        scannedRoms[rom.Name] = rom;
+                    }
+                }
+                
+                // Update progress every batch
+                var processed = Math.Min(i + batchSize, romFileInfos.Count);
+                var percentage = (int)((double)processed / totalFiles * 100);
+                progress?.Report(new ScanProgress 
+                { 
+                    Phase = $"Scanning ROM files... ({processed}/{totalFiles})", 
+                    Percentage = percentage,
+                    ItemsProcessed = processed
+                });
+            }
+        }, cancellationToken);
     }
+
+
 
     /// <summary>
     /// Quick scan to get ROM count without full details (for progress estimation)
@@ -260,95 +275,17 @@ public class RomScanner
     }
 
     /// <summary>
-    /// Matches metadata for a scanned ROM using fuzzy matching logic
+    /// Matches metadata for a scanned ROM using exact matching only
     /// </summary>
     private void MatchMetadata(ScannedRom scannedRom, Dictionary<string, MameGame> metadataLookup)
     {
-        // Try exact match first
+        // Only try exact match - XML should contain exact matches only
         if (metadataLookup.TryGetValue(scannedRom.Name, out var metadata))
         {
             scannedRom.Metadata = metadata;
-            return;
-        }
-
-        // Try fuzzy matching for common naming variations
-        var fuzzyMatch = FindFuzzyMatch(scannedRom.Name, metadataLookup);
-        if (fuzzyMatch != null)
-        {
-            scannedRom.Metadata = fuzzyMatch;
         }
     }
 
-    /// <summary>
-    /// Attempts fuzzy matching for ROM names with common variations
-    /// </summary>
-    private MameGame? FindFuzzyMatch(string romName, Dictionary<string, MameGame> mameGames)
-    {
-        // Common ROM name variations to try
-        var variations = new[]
-        {
-            romName.Replace("_", ""),           // Remove underscores
-            romName.Replace("-", ""),           // Remove hyphens
-            romName.ToLowerInvariant(),         // Lowercase
-            romName.ToUpperInvariant(),         // Uppercase
-            RemoveRegionCodes(romName),         // Remove region codes like (USA), [!], etc.
-            RemoveVersionNumbers(romName)       // Remove version numbers like v1.1, rev1, etc.
-        };
-
-        foreach (var variation in variations.Where(v => !string.IsNullOrEmpty(v)))
-        {
-            if (mameGames.TryGetValue(variation, out var match))
-            {
-                return match;
-            }
-        }
-
-        // Disable partial matching to prevent incorrect matches
-        // If exact match and variations don't work, return null
-        return null;
-    }
-
-    /// <summary>
-    /// Removes common region codes from ROM names
-    /// </summary>
-    private string RemoveRegionCodes(string romName)
-    {
-        var patterns = new[]
-        {
-            @"\(USA\)", @"\(Europe\)", @"\(Japan\)", @"\(World\)",
-            @"\[!\]", @"\[a\d*\]", @"\[b\d*\]", @"\[f\d*\]",
-            @"\(Rev \d+\)", @"\(v\d+\.\d+\)"
-        };
-
-        var result = romName;
-        foreach (var pattern in patterns)
-        {
-            result = System.Text.RegularExpressions.Regex.Replace(result, pattern, "", 
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Removes version numbers from ROM names
-    /// </summary>
-    private string RemoveVersionNumbers(string romName)
-    {
-        var patterns = new[]
-        {
-            @"v\d+\.\d+", @"rev\d+", @"r\d+", @"\d+\.\d+$"
-        };
-
-        var result = romName;
-        foreach (var pattern in patterns)
-        {
-            result = System.Text.RegularExpressions.Regex.Replace(result, pattern, "", 
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
-        }
-
-        return result;
-    }
 
     /// <summary>
     /// Scans the destination directory and marks ROMs as being in destination
@@ -358,12 +295,12 @@ public class RomScanner
     /// <param name="progress">Progress reporter</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Number of ROMs found in destination</returns>
-    public async Task<int> ScanDestinationAsync(string destinationPath, Dictionary<string, ScannedRom> roms, 
+    public Task<int> ScanDestinationAsync(string destinationPath, Dictionary<string, ScannedRom> roms, 
         IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(destinationPath) || !Directory.Exists(destinationPath))
         {
-            return 0;
+            return Task.FromResult(0);
         }
 
         progress?.Report("Scanning destination directory...");
@@ -433,7 +370,7 @@ public class RomScanner
             }
 
             progress?.Report($"Marked {markedCount} ROMs as being in destination");
-            return destinationRoms.Count;
+            return Task.FromResult(destinationRoms.Count);
         }
         catch (Exception ex)
         {
@@ -444,6 +381,15 @@ public class RomScanner
 }
 
 /// <summary>
+/// Information about CHD files for a ROM
+/// </summary>
+public class ChdInfo
+{
+    public List<string> ChdFiles { get; set; } = new();
+    public long TotalSize { get; set; }
+}
+
+/// <summary>
 /// Progress information for ROM scanning
 /// </summary>
 public class ScanProgress
@@ -451,4 +397,6 @@ public class ScanProgress
     public string Phase { get; set; } = string.Empty;
     public int Percentage { get; set; }
     public int ItemsProcessed { get; set; }
+    public int ChdCount { get; set; }
+    public int TotalChdDirectories { get; set; }
 }

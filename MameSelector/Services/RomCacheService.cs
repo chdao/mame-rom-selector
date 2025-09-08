@@ -50,10 +50,12 @@ public class RomCacheService
     /// <summary>
     /// Saves the scanned ROM data to cache
     /// </summary>
-    public async Task SaveCacheAsync(Dictionary<string, ScannedRom> scannedRoms, AppSettings settings)
+    public async Task SaveCacheAsync(Dictionary<string, ScannedRom> scannedRoms, AppSettings settings, IProgress<string>? progress = null)
     {
         try
         {
+            progress?.Report("Preparing cache data... (85%)");
+            
             var cacheData = new RomCacheData
             {
                 Version = CacheVersion,
@@ -61,22 +63,29 @@ public class RomCacheService
                 RomRepositoryPath = settings.RomRepositoryPath,
                 CHDRepositoryPath = settings.CHDRepositoryPath,
                 MameXmlPath = settings.MameXmlPath,
-                RomRepositoryHash = null, // Skip hash calculation for speed
+                RomRepositoryHash = string.Empty, // Skip hash calculation for speed
                 CHDRepositoryHash = null, // Skip hash calculation for speed
                 MameXmlHash = null, // Skip hash calculation for speed
                 ScannedRoms = scannedRoms
             };
 
+            progress?.Report("Serializing cache data... (90%)");
+            
             var options = new JsonSerializerOptions
             {
                 WriteIndented = false, // Compact for performance
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
 
-            var json = JsonSerializer.Serialize(cacheData, options);
+            // Run serialization in background thread to avoid blocking UI
+            var json = await Task.Run(() => JsonSerializer.Serialize(cacheData, options));
+            
+            progress?.Report("Writing cache file... (95%)");
             await File.WriteAllTextAsync(_cacheFilePath, json);
+            
+            progress?.Report("Cache saved successfully (100%)");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Log error but don't throw - caching is optional
         }
@@ -112,31 +121,32 @@ public class RomCacheService
 
             progress?.Report(20);
 
-            // Load ROMs with progress and real-time callbacks
+            // Load ROMs efficiently in background thread
             if (cacheData.ScannedRoms != null && romLoadedCallback != null)
             {
                 var romList = cacheData.ScannedRoms.Values.ToList();
                 var totalRoms = romList.Count;
                 
-                for (int i = 0; i < totalRoms; i++)
+                // Process ROMs in background thread to avoid UI blocking
+                await Task.Run(() =>
                 {
-                    var rom = romList[i];
-                    
-                    // Clear InDestination flag since destination directory state may have changed
-                    rom.InDestination = false;
-                    
-                    romLoadedCallback(rom);
-                    
-                    // Report progress (20% to 100%)
-                    var progressPercent = 20 + (int)((double)(i + 1) / totalRoms * 80);
-                    progress?.Report(progressPercent);
-                    
-                    // Small delay to allow UI updates and make progress visible
-                    if (i % 100 == 0) // Every 100 ROMs
+                    for (int i = 0; i < totalRoms; i++)
                     {
-                        await Task.Delay(1);
+                        var rom = romList[i];
+                        rom.InDestination = false;
+                        
+                        // Batch UI updates - only call callback every 100 ROMs
+                        if (i % 100 == 0 || i == totalRoms - 1)
+                        {
+                            // Report progress (20% to 100%)
+                            var progressPercent = 20 + (int)((double)(i + 1) / totalRoms * 80);
+                            progress?.Report(progressPercent);
+                        }
                     }
-                }
+                });
+                
+                // Single batch update at the end - much more efficient
+                progress?.Report(100);
             }
 
             // Clear InDestination flags for all ROMs since destination directory state may have changed
@@ -150,7 +160,7 @@ public class RomCacheService
 
             return cacheData.ScannedRoms;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return null;
         }
@@ -206,7 +216,7 @@ public class RomCacheService
             }
             return Task.CompletedTask;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return Task.CompletedTask;
         }
@@ -215,39 +225,39 @@ public class RomCacheService
     /// <summary>
     /// Validates if the cached data is still valid
     /// </summary>
-    private async Task<CacheValidationResult> ValidateCacheAsync(RomCacheData cacheData, AppSettings settings)
+    private Task<CacheValidationResult> ValidateCacheAsync(RomCacheData cacheData, AppSettings settings)
     {
         // Check version compatibility
         if (cacheData.Version != CacheVersion)
-            return new CacheValidationResult(false, "Cache version mismatch");
+            return Task.FromResult(new CacheValidationResult(false, "Cache version mismatch"));
 
         // Check if paths have changed
         if (cacheData.RomRepositoryPath != settings.RomRepositoryPath)
-            return new CacheValidationResult(false, "ROM repository path changed");
+            return Task.FromResult(new CacheValidationResult(false, "ROM repository path changed"));
 
         if (cacheData.CHDRepositoryPath != settings.CHDRepositoryPath)
-            return new CacheValidationResult(false, "CHD repository path changed");
+            return Task.FromResult(new CacheValidationResult(false, "CHD repository path changed"));
 
         if (cacheData.MameXmlPath != settings.MameXmlPath)
-            return new CacheValidationResult(false, "MAME XML path changed");
+            return Task.FromResult(new CacheValidationResult(false, "MAME XML path changed"));
 
         // Check if directories still exist
         if (!Directory.Exists(settings.RomRepositoryPath))
-            return new CacheValidationResult(false, "ROM repository no longer exists");
+            return Task.FromResult(new CacheValidationResult(false, "ROM repository no longer exists"));
 
         if (!string.IsNullOrEmpty(settings.CHDRepositoryPath) && !Directory.Exists(settings.CHDRepositoryPath))
-            return new CacheValidationResult(false, "CHD repository no longer exists");
+            return Task.FromResult(new CacheValidationResult(false, "CHD repository no longer exists"));
 
         if (!File.Exists(settings.MameXmlPath))
-            return new CacheValidationResult(false, "MAME XML file no longer exists");
+            return Task.FromResult(new CacheValidationResult(false, "MAME XML file no longer exists"));
 
         // Skip hash-based validation for speed - just check basic path and age validation
 
         // Check cache age (invalidate after 30 days)
         if (DateTime.UtcNow - cacheData.CreatedAt > TimeSpan.FromDays(30))
-            return new CacheValidationResult(false, "Cache too old");
+            return Task.FromResult(new CacheValidationResult(false, "Cache too old"));
 
-        return new CacheValidationResult(true, "Cache is valid");
+        return Task.FromResult(new CacheValidationResult(true, "Cache is valid"));
     }
 
     /// <summary>

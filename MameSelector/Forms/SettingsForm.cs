@@ -17,6 +17,7 @@ public partial class SettingsForm : Form
             CHDRepositoryPath = settings.CHDRepositoryPath,
             CopyBiosFiles = settings.CopyBiosFiles,
             CopyDeviceFiles = settings.CopyDeviceFiles,
+            ShowBiosAndDevices = settings.ShowBiosAndDevices,
             CreateSubfolders = settings.CreateSubfolders,
             VerifyChecksums = settings.VerifyChecksums,
             PortableMode = settings.PortableMode
@@ -33,6 +34,7 @@ public partial class SettingsForm : Form
         textBoxCHDRepository.Text = Settings.CHDRepositoryPath;
         checkBoxCopyBios.Checked = Settings.CopyBiosFiles;
         checkBoxCopyDevice.Checked = Settings.CopyDeviceFiles;
+        checkBoxShowDevices.Checked = Settings.ShowBiosAndDevices;
         checkBoxCreateSubfolders.Checked = Settings.CreateSubfolders;
         checkBoxVerifyChecksums.Checked = Settings.VerifyChecksums;
         checkBoxPortableMode.Checked = Settings.PortableMode;
@@ -46,6 +48,7 @@ public partial class SettingsForm : Form
         Settings.CHDRepositoryPath = textBoxCHDRepository.Text.Trim();
         Settings.CopyBiosFiles = checkBoxCopyBios.Checked;
         Settings.CopyDeviceFiles = checkBoxCopyDevice.Checked;
+        Settings.ShowBiosAndDevices = checkBoxShowDevices.Checked;
         Settings.CreateSubfolders = checkBoxCreateSubfolders.Checked;
         Settings.VerifyChecksums = checkBoxVerifyChecksums.Checked;
         Settings.PortableMode = checkBoxPortableMode.Checked;
