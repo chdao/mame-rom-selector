@@ -8,8 +8,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyTitle>MAME ROM Selector</AssemblyTitle>
     <AssemblyDescription>A tool for selecting and copying MAME ROMs from a full romset</AssemblyDescription>
-    <AssemblyVersion>0.3.3.0</AssemblyVersion>
-    <FileVersion>0.3.3.0</FileVersion>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
+    <FileVersion>0.4.0.0</FileVersion>
     <ApplicationIcon>Resources\mame-rom-selector.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
