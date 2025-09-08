@@ -8,16 +8,43 @@ namespace MameSelector.Services;
 /// </summary>
 public class RomCacheService
 {
-    private readonly string _cacheFilePath;
+    private string _cacheFilePath;
     private const string CacheFileName = "rom_cache.json";
     private const int CacheVersion = 1;
 
     public RomCacheService()
     {
-        var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var appFolder = Path.Combine(appDataPath, "MameSelector");
-        Directory.CreateDirectory(appFolder);
-        _cacheFilePath = Path.Combine(appFolder, CacheFileName);
+        // Default to portable mode - will be updated when settings are loaded
+        _cacheFilePath = GetCacheFilePath(true);
+    }
+
+    /// <summary>
+    /// Updates the cache file path based on portable mode setting
+    /// </summary>
+    public void UpdateCachePath(bool portableMode)
+    {
+        _cacheFilePath = GetCacheFilePath(portableMode);
+    }
+
+    /// <summary>
+    /// Gets the cache file path based on portable mode
+    /// </summary>
+    private string GetCacheFilePath(bool portableMode)
+    {
+        if (portableMode)
+        {
+            // Store alongside the executable
+            var exeDir = AppContext.BaseDirectory;
+            return Path.Combine(exeDir, CacheFileName);
+        }
+        else
+        {
+            // Store in AppData
+            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var appFolder = Path.Combine(appDataPath, "MameSelector");
+            Directory.CreateDirectory(appFolder);
+            return Path.Combine(appFolder, CacheFileName);
+        }
     }
 
     /// <summary>

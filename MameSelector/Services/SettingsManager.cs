@@ -9,15 +9,35 @@ namespace MameSelector.Services;
 /// </summary>
 public class SettingsManager
 {
-    private readonly string _settingsFilePath;
+    private string _settingsFilePath;
     private AppSettings? _cachedSettings;
 
     public SettingsManager()
     {
-        var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var appFolder = Path.Combine(appDataPath, "MameSelector");
-        Directory.CreateDirectory(appFolder);
-        _settingsFilePath = Path.Combine(appFolder, "settings.json");
+        // We'll determine the path based on the portable mode setting
+        // For now, default to portable mode (alongside executable)
+        _settingsFilePath = GetSettingsFilePath(true);
+    }
+
+    /// <summary>
+    /// Gets the settings file path based on portable mode
+    /// </summary>
+    private string GetSettingsFilePath(bool portableMode)
+    {
+        if (portableMode)
+        {
+            // Store alongside the executable
+            var exeDir = AppContext.BaseDirectory;
+            return Path.Combine(exeDir, "settings.json");
+        }
+        else
+        {
+            // Store in AppData
+            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var appFolder = Path.Combine(appDataPath, "MameSelector");
+            Directory.CreateDirectory(appFolder);
+            return Path.Combine(appFolder, "settings.json");
+        }
     }
 
     /// <summary>
@@ -30,15 +50,36 @@ public class SettingsManager
 
         try
         {
-            if (File.Exists(_settingsFilePath))
+            // First, try to load from portable location (default)
+            var portablePath = GetSettingsFilePath(true);
+            var appDataPath = GetSettingsFilePath(false);
+            
+            AppSettings? loadedSettings = null;
+            
+            // Try portable first
+            if (File.Exists(portablePath))
             {
-                var json = await File.ReadAllTextAsync(_settingsFilePath);
-                _cachedSettings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+                var json = await File.ReadAllTextAsync(portablePath);
+                loadedSettings = JsonSerializer.Deserialize<AppSettings>(json);
             }
-            else
+            // If not found in portable, try AppData
+            else if (File.Exists(appDataPath))
             {
-                _cachedSettings = new AppSettings();
+                var json = await File.ReadAllTextAsync(appDataPath);
+                loadedSettings = JsonSerializer.Deserialize<AppSettings>(json);
+                
+                // If we found settings in AppData but portable mode is enabled, migrate them
+                if (loadedSettings?.PortableMode == true)
+                {
+                    await File.WriteAllTextAsync(portablePath, json);
+                    // Don't delete the AppData file yet - let user decide
+                }
             }
+            
+            _cachedSettings = loadedSettings ?? new AppSettings();
+            
+            // Update the settings file path based on the loaded portable mode setting
+            _settingsFilePath = GetSettingsFilePath(_cachedSettings.PortableMode);
         }
         catch (Exception ex)
         {
@@ -63,7 +104,28 @@ public class SettingsManager
             };
             
             var json = JsonSerializer.Serialize(settings, options);
-            await File.WriteAllTextAsync(_settingsFilePath, json);
+            
+            // Check if portable mode has changed
+            var newPath = GetSettingsFilePath(settings.PortableMode);
+            var oldPath = _settingsFilePath;
+            
+            // Save to the new location
+            await File.WriteAllTextAsync(newPath, json);
+            
+            // If the path changed, clean up the old file
+            if (newPath != oldPath && File.Exists(oldPath))
+            {
+                try
+                {
+                    File.Delete(oldPath);
+                }
+                catch
+                {
+                    // Ignore cleanup errors
+                }
+            }
+            
+            _settingsFilePath = newPath;
             _cachedSettings = settings;
         }
         catch (Exception ex)

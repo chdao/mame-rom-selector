@@ -80,6 +80,10 @@ public class MainController
         try
         {
             _settings = await _settingsManager.LoadSettingsAsync();
+            
+            // Update cache service path based on portable mode setting
+            _cacheService.UpdateCachePath(_settings.PortableMode);
+            
             UpdateStatus("Settings loaded successfully");
         }
         catch (Exception ex)
@@ -95,14 +99,90 @@ public class MainController
     {
         try
         {
-            await _settingsManager.SaveSettingsAsync(newSettings);
+            var oldSettings = _settings;
+            var portableModeChanged = oldSettings.PortableMode != newSettings.PortableMode;
+            
             _settings = newSettings;
+            
+            // Update cache service path if portable mode changed
+            if (portableModeChanged)
+            {
+                _cacheService.UpdateCachePath(_settings.PortableMode);
+                
+                // If switching to portable mode, try to migrate cache from AppData
+                if (_settings.PortableMode)
+                {
+                    await MigrateCacheToPortableAsync();
+                }
+                // If switching from portable mode, try to migrate cache to AppData
+                else
+                {
+                    await MigrateCacheToAppDataAsync();
+                }
+            }
+            
+            // Save settings
+            await _settingsManager.SaveSettingsAsync(_settings);
             UpdateStatus("Settings saved successfully");
         }
         catch (Exception ex)
         {
             UpdateStatus($"Error saving settings: {ex.Message}");
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Migrates cache from AppData to portable location
+    /// </summary>
+    private async Task MigrateCacheToPortableAsync()
+    {
+        try
+        {
+            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var appDataCachePath = Path.Combine(appDataPath, "MameSelector", "rom_cache.json");
+            
+            if (File.Exists(appDataCachePath))
+            {
+                var exeDir = AppContext.BaseDirectory;
+                var portableCachePath = Path.Combine(exeDir, "rom_cache.json");
+                
+                // Copy cache to portable location
+                File.Copy(appDataCachePath, portableCachePath, true);
+                UpdateStatus("Cache migrated to portable location");
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus($"Warning: Could not migrate cache to portable location: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Migrates cache from portable location to AppData
+    /// </summary>
+    private async Task MigrateCacheToAppDataAsync()
+    {
+        try
+        {
+            var exeDir = AppContext.BaseDirectory;
+            var portableCachePath = Path.Combine(exeDir, "rom_cache.json");
+            
+            if (File.Exists(portableCachePath))
+            {
+                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var appDataFolder = Path.Combine(appDataPath, "MameSelector");
+                Directory.CreateDirectory(appDataFolder);
+                var appDataCachePath = Path.Combine(appDataFolder, "rom_cache.json");
+                
+                // Copy cache to AppData location
+                File.Copy(portableCachePath, appDataCachePath, true);
+                UpdateStatus("Cache migrated to AppData location");
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus($"Warning: Could not migrate cache to AppData location: {ex.Message}");
         }
     }
 

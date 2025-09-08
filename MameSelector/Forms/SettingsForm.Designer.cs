@@ -46,6 +46,7 @@ partial class SettingsForm
         checkBoxCopyDevice = new CheckBox();
         checkBoxCreateSubfolders = new CheckBox();
         checkBoxVerifyChecksums = new CheckBox();
+        checkBoxPortableMode = new CheckBox();
         buttonOK = new Button();
         buttonCancel = new Button();
         
@@ -194,6 +195,7 @@ partial class SettingsForm
         // 
         // groupBoxOptions
         // 
+        groupBoxOptions.Controls.Add(checkBoxPortableMode);
         groupBoxOptions.Controls.Add(checkBoxVerifyChecksums);
         groupBoxOptions.Controls.Add(checkBoxCreateSubfolders);
         groupBoxOptions.Controls.Add(checkBoxCopyDevice);
@@ -248,6 +250,17 @@ partial class SettingsForm
         checkBoxVerifyChecksums.TabIndex = 3;
         checkBoxVerifyChecksums.Text = "Verify checksums";
         checkBoxVerifyChecksums.UseVisualStyleBackColor = true;
+        
+        // 
+        // checkBoxPortableMode
+        // 
+        checkBoxPortableMode.AutoSize = true;
+        checkBoxPortableMode.Location = new Point(200, 50);
+        checkBoxPortableMode.Name = "checkBoxPortableMode";
+        checkBoxPortableMode.Size = new Size(200, 19);
+        checkBoxPortableMode.TabIndex = 4;
+        checkBoxPortableMode.Text = "Portable mode (store cache alongside exe)";
+        checkBoxPortableMode.UseVisualStyleBackColor = true;
         
         // 
         // buttonOK
@@ -315,6 +328,7 @@ partial class SettingsForm
     private CheckBox checkBoxCopyDevice;
     private CheckBox checkBoxCreateSubfolders;
     private CheckBox checkBoxVerifyChecksums;
+    private CheckBox checkBoxPortableMode;
     private Button buttonOK;
     private Button buttonCancel;
 }

@@ -14,6 +14,9 @@ public class AppSettings
     public bool CreateSubfolders { get; set; } = false;
     public bool VerifyChecksums { get; set; } = false;
     
+    // Portable mode - when true, cache and settings are stored alongside the executable
+    public bool PortableMode { get; set; } = true; // Default to portable for better user experience
+    
     // Window state persistence
     public int WindowWidth { get; set; } = 1600;
     public int WindowHeight { get; set; } = 900;

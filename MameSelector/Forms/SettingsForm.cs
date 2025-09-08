@@ -18,7 +18,8 @@ public partial class SettingsForm : Form
             CopyBiosFiles = settings.CopyBiosFiles,
             CopyDeviceFiles = settings.CopyDeviceFiles,
             CreateSubfolders = settings.CreateSubfolders,
-            VerifyChecksums = settings.VerifyChecksums
+            VerifyChecksums = settings.VerifyChecksums,
+            PortableMode = settings.PortableMode
         };
 
         LoadSettingsToUI();
@@ -34,6 +35,7 @@ public partial class SettingsForm : Form
         checkBoxCopyDevice.Checked = Settings.CopyDeviceFiles;
         checkBoxCreateSubfolders.Checked = Settings.CreateSubfolders;
         checkBoxVerifyChecksums.Checked = Settings.VerifyChecksums;
+        checkBoxPortableMode.Checked = Settings.PortableMode;
     }
 
     private void SaveSettingsFromUI()
@@ -46,6 +48,7 @@ public partial class SettingsForm : Form
         Settings.CopyDeviceFiles = checkBoxCopyDevice.Checked;
         Settings.CreateSubfolders = checkBoxCreateSubfolders.Checked;
         Settings.VerifyChecksums = checkBoxVerifyChecksums.Checked;
+        Settings.PortableMode = checkBoxPortableMode.Checked;
     }
 
     private void ButtonBrowseMameXml_Click(object sender, EventArgs e)

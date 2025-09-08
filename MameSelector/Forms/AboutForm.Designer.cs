@@ -42,7 +42,7 @@ namespace MameSelector.Forms
             iconPictureBox.Location = new Point(20, 20);
             iconPictureBox.Name = "iconPictureBox";
             iconPictureBox.Size = new Size(64, 64);
-            iconPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+            iconPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
             iconPictureBox.TabIndex = 0;
             iconPictureBox.TabStop = false;
             // 
