@@ -62,20 +62,19 @@ This project demonstrates how AI coding assistants can accelerate development wh
 - Windows 10/11
 - MAME XML file (typically `mame.xml` or similar)
 
-### Getting MAME ROMs and XML Files
+### Getting MAME Datfiles
 
-For MAME ROM collections and datfiles, we recommend using [PleasureDome](https://pleasuredome.github.io/pleasuredome/mame/), which provides:
+For MAME datfiles, we recommend using [PleasureDome](https://pleasuredome.github.io/pleasuredome/mame/), which provides:
 
-- **Complete MAME ROM sets** (merged, non-merged, split)
-- **MAME CHD files** for games requiring disk images
-- **Official datfiles** for ROM management and verification
-- **BIOS and device files** for proper emulation
-- **Update sets** for keeping collections current
+- **Official MAME datfiles** for ROM management and verification
+- **MAME CHD datfiles** for games requiring disk images
+- **BIOS and device datfiles** for proper emulation
+- **Update datfiles** for keeping collections current
 
 **Recommended for this tool:**
-- Download the **MAME XML file** (datfile) from PleasureDome for metadata matching
-- Use **non-merged ROM sets** for individual game selection (each game is self-contained)
-- Include **BIOS and device files** for complete compatibility
+- Download the **MAME datfile** from PleasureDome for metadata matching
+- **Non-merged datfiles work best** with this tool as each game is self-contained
+- Include **BIOS and device datfiles** for complete compatibility
 
 ## Installation
 
@@ -99,10 +98,10 @@ For MAME ROM collections and datfiles, we recommend using [PleasureDome](https:/
 
 ### Initial Setup
 
-1. **Get MAME Files**: Download ROMs and XML datfile from [PleasureDome](https://pleasuredome.github.io/pleasuredome/mame/)
-   - **Recommended**: Use non-merged ROM sets for individual game selection
-   - **XML File**: Download the MAME datfile for metadata matching
-   - **BIOS/Devices**: Include BIOS and device files for complete compatibility
+1. **Get MAME Datfile**: Download the MAME datfile from [PleasureDome](https://pleasuredome.github.io/pleasuredome/mame/)
+   - **Recommended**: Use non-merged datfiles for best compatibility with this tool
+   - **XML File**: The datfile provides metadata for ROM matching and verification
+   - **BIOS/Devices**: Include BIOS and device datfiles for complete compatibility
 
 2. **Configure Settings**: Go to `File > Settings` to configure:
    - ROM Repository Path (source directory containing your ROM files)

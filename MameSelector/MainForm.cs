@@ -181,6 +181,23 @@ public partial class MainForm : Form
         aboutForm.ShowDialog(this);
     }
 
+    private void DownloadDatfilesToolStripMenuItem_Click(object sender, EventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "https://pleasuredome.github.io/pleasuredome/mame/",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not open browser: {ex.Message}", "Error", 
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
     private void SearchTextBox_TextChanged(object sender, EventArgs e)
     {
         _controller.FilterRoms(searchTextBox.Text);

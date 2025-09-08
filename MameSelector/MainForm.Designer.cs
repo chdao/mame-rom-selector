@@ -54,6 +54,7 @@ partial class MainForm
         toolStripSeparator5 = new ToolStripSeparator();
         exitToolStripMenuItem = new ToolStripMenuItem();
         helpToolStripMenuItem = new ToolStripMenuItem();
+        downloadDatfilesToolStripMenuItem = new ToolStripMenuItem();
         aboutToolStripMenuItem = new ToolStripMenuItem();
         copyRomsButton = new Button();
         statusStrip = new StatusStrip();
@@ -164,11 +165,18 @@ partial class MainForm
         // 
         // helpToolStripMenuItem
         // 
-        helpToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { aboutToolStripMenuItem });
+        helpToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { downloadDatfilesToolStripMenuItem, aboutToolStripMenuItem });
         helpToolStripMenuItem.Name = "helpToolStripMenuItem";
         helpToolStripMenuItem.Size = new Size(44, 20);
         helpToolStripMenuItem.Text = "&Help";
 
+        // 
+        // downloadDatfilesToolStripMenuItem
+        // 
+        downloadDatfilesToolStripMenuItem.Name = "downloadDatfilesToolStripMenuItem";
+        downloadDatfilesToolStripMenuItem.Size = new Size(160, 22);
+        downloadDatfilesToolStripMenuItem.Text = "&Download datfiles";
+        downloadDatfilesToolStripMenuItem.Click += DownloadDatfilesToolStripMenuItem_Click;
 
         // 
         // aboutToolStripMenuItem
@@ -520,6 +528,7 @@ partial class MainForm
     private ToolStripSeparator toolStripSeparator5;
     private ToolStripMenuItem exitToolStripMenuItem;
     private ToolStripMenuItem helpToolStripMenuItem;
+    private ToolStripMenuItem downloadDatfilesToolStripMenuItem;
     private ToolStripMenuItem aboutToolStripMenuItem;
     private Button scanRomsButton;
     private Button copyRomsButton;
