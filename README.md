@@ -26,6 +26,36 @@ This tool helps you scan, verify, and copy ROMs from your source directory to a 
 - **Cache System**: Intelligent caching system for faster subsequent scans
 - **Settings Management**: Configure ROM repository, destination, and MAME XML paths
 
+## 🤖 AI-Generated Development
+
+**This entire repository was developed using AI-assisted programming!**
+
+This project serves as a comprehensive example of modern AI-assisted software development, showcasing the capabilities of AI coding assistants in creating production-ready applications.
+
+### Development Process
+- **Primary Tool**: [Cursor IDE](https://cursor.sh/) with Claude Sonnet integration
+- **AI Assistant**: Claude Sonnet 4 (Anthropic) for code generation, debugging, and architecture decisions
+- **Development Approach**: Iterative AI-human collaboration with real-time code generation and refinement
+- **Code Quality**: Production-ready C# Windows Forms application with proper error handling, async patterns, and professional UI
+
+### What Was AI-Generated
+- **Complete Application Architecture**: Service layer, controllers, models, and UI components
+- **Complex Features**: XML parsing, ROM scanning, metadata matching, caching system
+- **UI/UX Design**: Professional Windows Forms interface with custom controls and layouts
+- **Error Handling**: Comprehensive exception handling and user feedback systems
+- **Documentation**: README, code comments, and technical documentation
+- **CI/CD Pipeline**: GitHub Actions workflows for automated building and releasing
+- **Project Configuration**: .NET project files, build settings, and deployment configurations
+
+### AI Development Highlights
+- **Rapid Prototyping**: From concept to working application in hours, not days
+- **Code Quality**: Clean, maintainable code following C# best practices
+- **Feature Completeness**: Full-featured application with professional polish
+- **Problem Solving**: Complex debugging and optimization through AI assistance
+- **Documentation**: Comprehensive documentation generated alongside the code
+
+This project demonstrates how AI coding assistants can accelerate development while maintaining high code quality and professional standards. The entire codebase, from the initial architecture to the final deployment pipeline, was created through AI-human collaboration.
+
 ## Requirements
 
 - .NET 8.0 or later
@@ -89,6 +119,8 @@ The right panel shows ROMs already copied to destination with:
 
 ## Recent Improvements (v0.3.3)
 
+- **Portable Mode**: Default portable mode with cache/settings alongside executable, optional AppData mode
+- **High-Resolution Icons**: Professional icon display in About dialog with smart resolution selection
 - **Application Icon**: Professional icon implementation with proper taskbar and window display
 - **UI Cleanup**: Removed redundant toolstrip, streamlined interface
 - **Button Organization**: Logical grouping of ROM management functions
@@ -123,6 +155,17 @@ This project follows semantic versioning (SemVer) with the format `MAJOR.MINOR.P
 - **v0.3.0**: Initial stable release with core functionality
 
 ## Development
+
+### AI-Assisted Development
+
+This project was entirely developed using AI-assisted programming with Cursor IDE and Claude Sonnet. The development process demonstrates the power of modern AI coding assistants in creating production-ready applications.
+
+**Key Development Statistics:**
+- **Development Time**: Hours instead of days/weeks
+- **Code Generation**: 100% AI-assisted with human guidance and refinement
+- **Architecture**: Complete application architecture designed and implemented by AI
+- **Quality**: Production-ready code with proper error handling and async patterns
+- **Documentation**: Comprehensive documentation generated alongside the code
 
 ### CI/CD Pipeline
 
