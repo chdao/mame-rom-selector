@@ -541,34 +541,23 @@ public partial class MainForm : Form
 
         var details = new List<string>();
         
-        // Basic info - one line per item
+        // Basic info - compact format
         details.Add($"ROM: {rom.Name}");
         details.Add($"Description: {rom.DisplayName}");
         details.Add($"Manufacturer: {rom.DisplayManufacturer}");
         details.Add($"Year: {rom.DisplayYear}");
-        details.Add($"Type: {GetRomType(rom)}");
-        details.Add($"Status: {(rom.InDestination ? "Installed" : "Not Installed")}");
-        details.Add("");
+        details.Add($"Size: {FormatFileSize(rom.TotalSize)}");
         
-        // File info - simplified
+        // CHD info - compact format
         if (rom.ChdFiles.Count > 0)
         {
-            details.Add($"CHD Files: {rom.ChdFiles.Count}");
-            details.Add($"Total Size: {FormatFileSize(rom.TotalSize)}");
-            details.Add("");
-            
-            // Display CHD files on a single line, comma-separated
             var chdFileNames = rom.ChdFiles.Select(f => Path.GetFileName(f)).ToList();
             var chdList = string.Join(", ", chdFileNames);
             if (chdList.Length > 100) // Truncate if too long
             {
                 chdList = chdList.Substring(0, 97) + "...";
             }
-            details.Add($"CHD Files: {chdList}");
-        }
-        else
-        {
-            details.Add($"Size: {FormatFileSize(rom.TotalSize)}");
+            details.Add($"CHDs ({rom.ChdFiles.Count}): {chdList}");
         }
         
         // Metadata info - only show meaningful information
