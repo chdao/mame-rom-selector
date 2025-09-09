@@ -13,30 +13,75 @@ public partial class MainForm : Form
     private readonly DestinationRomListView _destinationRomListView;
     private CancellationTokenSource? _cancellationTokenSource;
     private bool _isCopying = false;
-    private string _lastDebugMessage = string.Empty;
+    private string _lastConsoleMessage = string.Empty;
 
     /// <summary>
-    /// Logs a debug message to the debug log text box (only if different from last message)
+    /// Logs a message to the console text box (only if different from last message)
     /// </summary>
-    public void LogDebug(string message)
+    public void LogConsole(string message)
     {
         if (InvokeRequired)
         {
-            Invoke(new Action<string>(LogDebug), message);
+            Invoke(new Action<string>(LogConsole), message);
             return;
         }
 
         // Only log if message is different from the last one to avoid spam
-        if (message == _lastDebugMessage)
+        // But allow CHD messages and other important messages through
+        if (message == _lastConsoleMessage && !IsImportantConsoleMessage(message))
             return;
 
-        _lastDebugMessage = message;
+        _lastConsoleMessage = message;
         var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
         var logMessage = $"[{timestamp}] {message}\r\n";
         
         debugLogTextBox.AppendText(logMessage);
         debugLogTextBox.SelectionStart = debugLogTextBox.Text.Length;
         debugLogTextBox.ScrollToCaret();
+    }
+
+    /// <summary>
+    /// Determines if a console message is important enough to always log (bypassing duplicate filter)
+    /// </summary>
+    private bool IsImportantConsoleMessage(string message)
+    {
+        return message.Contains("CHD Debug:") ||
+               message.Contains("Unmatched CHD directories") ||
+               message.Contains("Sample unmatched CHD dirs") ||
+               message.Contains("All CHD directories have corresponding ROMs") ||
+               message.Contains("Cache load:") ||
+               message.Contains("ROMs with CHDs found:") ||
+               message.Contains("Sample ROM with CHDs:") ||
+               message.Contains("First CHD file:") ||
+               message.Contains("ROMs with empty ChdFiles:") ||
+               message.Contains("ROMs with null ChdFiles:");
+    }
+
+    /// <summary>
+    /// Determines if a progress message should be logged to the debug window
+    /// </summary>
+    private bool ShouldLogProgressMessage(string message)
+    {
+        // Log all important progress messages, but filter out repetitive percentage updates
+        // Only filter out messages that are just percentage updates (contain "(" and "%)")
+        var isPercentageUpdate = message.Contains("(") && message.Contains("%)");
+        
+        // Always log these important messages regardless of percentage
+        var isImportantMessage = message.Contains("Scanning destination directory...") ||
+                                message.Contains("Found") && message.Contains("ROMs in destination") ||
+                                message.Contains("Marked") && message.Contains("ROMs as being in destination") ||
+                                message.Contains("Scan Complete") ||
+                                message.Contains("Cache saved successfully") ||
+                                message.Contains("Done") ||
+                                message.Contains("Loading ROM cache...") ||
+                                message.Contains("Scanning ROM files...") ||
+                                message.Contains("Scanning CHD directories...") ||
+                                message.Contains("Saving ROM cache...") ||
+                                message.Contains("Loading MAME XML...") ||
+                                message.Contains("Updating UI with") ||
+                                message.Contains("UI update complete");
+        
+        return isImportantMessage && !isPercentageUpdate;
     }
 
     /// <summary>
@@ -62,7 +107,9 @@ public partial class MainForm : Form
             Invoke(new Action<int>(UpdateChdCount), count);
             return;
         }
+        Console.WriteLine($"DEBUG: UpdateChdCount called with count: {count} (current label text: '{chdCountLabel.Text}')");
         chdCountLabel.Text = $"CHDs: {count:N0}";
+        Console.WriteLine($"DEBUG: UpdateChdCount updated label to: '{chdCountLabel.Text}'");
     }
 
     /// <summary>
@@ -154,7 +201,9 @@ public partial class MainForm : Form
 
     private void InitializeUI()
     {
-        Text = "MAME ROM Selector v0.3.3";
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var versionString = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "0.4.2";
+        Text = $"MAME ROM Selector v{versionString}";
         Size = new Size(1400, 900);
         StartPosition = FormStartPosition.CenterScreen;
         
@@ -219,6 +268,7 @@ public partial class MainForm : Form
 
         scanRomsButton.Enabled = hasValidXml && hasValidRepo && !_controller.IsLoading;
         copyRomsButton.Enabled = _controller.SelectedRoms.Any() && hasValidDest && !_controller.IsLoading;
+        
 
         if (!hasValidXml || !hasValidRepo)
         {
@@ -587,7 +637,6 @@ public partial class MainForm : Form
 
     private async Task ScanRomsAsync()
     {
-        
         if (_controller.IsLoading)
         {
             return;
@@ -598,14 +647,18 @@ public partial class MainForm : Form
 
         try
         {
-            StartProgress("Starting ROM scan...");
+            LogConsole("Scanning ROM Files started");
+            StartProgress("Scanning ROM Files started");
 
             var progress = new Progress<string>(message =>
             {
-                // Debug: Log the message to debug window
-                LogDebug($"Progress: {message}");
+                // Only log important messages to debug window (start/completion, not percentage updates)
+                if (ShouldLogProgressMessage(message))
+                {
+                    LogConsole($"Progress: {message}");
+                }
                 
-                // Debug: Always update progress to see if callback is working
+                // Always update progress bar and status
                 UpdateProgress(message);
                 
                 // Extract percentage from message if present
@@ -619,7 +672,8 @@ public partial class MainForm : Form
             });
 
             await _controller.ScanAndLoadRomsAsync(progress, _cancellationTokenSource.Token);
-            CompleteProgress("ROM scanning completed successfully");
+            LogConsole("Scanning ROM Files done");
+            CompleteProgress("done");
         }
         catch (OperationCanceledException)
         {

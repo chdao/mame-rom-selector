@@ -46,9 +46,10 @@ public class RomScanner
         if (!string.IsNullOrEmpty(chdRepositoryPath) && Directory.Exists(chdRepositoryPath))
         {
             progress?.Report(new ScanProgress { Phase = "Scanning CHD directories...", Percentage = 0 });
-            chdLookup = await ScanChdDirectoriesAsync(chdRepositoryPath, progress, cancellationToken);
-            totalChdDirectories = chdLookup.Count;
-            progress?.Report(new ScanProgress { Phase = $"Found {totalChdDirectories} CHD directories", Percentage = 0 });
+            var result = await ScanChdDirectoriesAsync(chdRepositoryPath, progress, cancellationToken);
+            chdLookup = result.Lookup;
+            totalChdDirectories = result.TotalDirectories;
+            progress?.Report(new ScanProgress { Phase = $"Found {totalChdDirectories} CHD directories ({chdLookup.Count} with CHD files)", Percentage = 0 });
         }
         else
         {
@@ -64,7 +65,7 @@ public class RomScanner
         var finalChdCount = scannedRoms.Values.Count(r => r.ChdFiles?.Count > 0);
         var totalChdFiles = scannedRoms.Values.Sum(r => r.ChdFiles?.Count ?? 0);
         
-        // Debug: Log the different counts
+        // Debug: Log the different counts to debug window
         progress?.Report(new ScanProgress { 
             Phase = $"Scan Complete - ROMs with CHDs: {finalChdCount}, Total CHD directories: {totalChdDirectories}, Total CHD files: {totalChdFiles}", 
             Percentage = 100, 
@@ -79,7 +80,7 @@ public class RomScanner
     /// <summary>
     /// Pre-scans CHD directories to create a lookup dictionary
     /// </summary>
-    private async Task<Dictionary<string, ChdInfo>> ScanChdDirectoriesAsync(
+    private async Task<ChdScanResult> ScanChdDirectoriesAsync(
         string chdPath,
         IProgress<ScanProgress>? progress,
         CancellationToken cancellationToken)
@@ -88,12 +89,26 @@ public class RomScanner
         
         // Run directory enumeration on background thread to avoid blocking UI
         var chdDirectories = await Task.Run(() => 
-            Directory.EnumerateDirectories(chdPath, "*", SearchOption.TopDirectoryOnly).ToList(), 
-            cancellationToken);
+        {
+            try
+            {
+                // Use DirectoryInfo.GetDirectories() which is most reliable
+                var dirInfo = new DirectoryInfo(chdPath);
+                return dirInfo.GetDirectories("*", SearchOption.TopDirectoryOnly)
+                    .Select(d => d.FullName)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                // Fallback to standard method if others fail
+                return Directory.EnumerateDirectories(chdPath, "*", SearchOption.TopDirectoryOnly).ToList();
+            }
+        }, cancellationToken);
         
         var totalDirs = chdDirectories.Count;
         var processedDirs = 0;
         
+        // Debug: Log the actual count found
         progress?.Report(new ScanProgress { Phase = $"Found {totalDirs} CHD directories to scan", Percentage = 0 });
         
         // Debug: Log some sample directory names
@@ -101,6 +116,10 @@ public class RomScanner
         {
             var sampleDirs = chdDirectories.Take(5).Select(d => Path.GetFileName(d)).ToList();
             progress?.Report(new ScanProgress { Phase = $"Sample CHD dirs: {string.Join(", ", sampleDirs)}", Percentage = 0 });
+            
+            // Debug: Log all directory names to help identify what's missing
+            var allDirNames = chdDirectories.Select(d => Path.GetFileName(d)).OrderBy(n => n).ToList();
+            progress?.Report(new ScanProgress { Phase = $"All CHD dirs found: {string.Join(", ", allDirNames.Take(10))}... (showing first 10)", Percentage = 0 });
         }
 
         await Task.Run(() =>
@@ -145,7 +164,52 @@ public class RomScanner
         });
 
         progress?.Report(new ScanProgress { Phase = $"CHD directory scan complete: {chdLookup.Count} directories with CHD files", Percentage = 100 });
-        return chdLookup;
+        
+        // Debug: Log unmatched CHD directories
+        var allDirNamesList = chdDirectories.Select(d => Path.GetFileName(d)).OrderBy(n => n).ToList();
+        var matchedDirNames = chdLookup.Keys.OrderBy(n => n).ToList();
+        var unmatchedDirs = allDirNamesList.Except(matchedDirNames, StringComparer.OrdinalIgnoreCase).ToList();
+        
+        // Debug: Log the counts for verification
+        progress?.Report(new ScanProgress { 
+            Phase = $"CHD Debug: Total dirs found: {allDirNamesList.Count}, Matched dirs: {matchedDirNames.Count}, Unmatched dirs: {unmatchedDirs.Count}", 
+            Percentage = 100
+        });
+        
+        
+        if (unmatchedDirs.Any())
+        {
+            // Log unmatched CHD directories to debug window with better formatting
+            var unmatchedList = string.Join(", ", unmatchedDirs.Take(20));
+            var message = $"Unmatched CHD directories ({unmatchedDirs.Count}): {unmatchedList}{(unmatchedDirs.Count > 20 ? "..." : "")}";
+            
+            progress?.Report(new ScanProgress { 
+                Phase = message, 
+                Percentage = 100
+            });
+            
+            // Also log a few sample unmatched directories individually for clarity
+            if (unmatchedDirs.Count > 0)
+            {
+                progress?.Report(new ScanProgress { 
+                    Phase = $"Sample unmatched CHD dirs: {string.Join(", ", unmatchedDirs.Take(5))}", 
+                    Percentage = 100
+                });
+            }
+        }
+        else
+        {
+            progress?.Report(new ScanProgress { 
+                Phase = "All CHD directories have corresponding ROMs", 
+                Percentage = 100
+            });
+        }
+        
+        return new ChdScanResult
+        {
+            Lookup = chdLookup,
+            TotalDirectories = totalDirs // Return total directories found, not just those with CHD files
+        };
     }
 
     /// <summary>
@@ -300,19 +364,24 @@ public class RomScanner
     {
         if (string.IsNullOrEmpty(destinationPath) || !Directory.Exists(destinationPath))
         {
+            Console.WriteLine($"DEBUG: Destination path validation failed. Path: '{destinationPath}', Exists: {Directory.Exists(destinationPath)}");
             return Task.FromResult(0);
         }
 
         progress?.Report("Scanning destination directory...");
+        Console.WriteLine($"DEBUG: Starting destination scan of: {destinationPath}");
 
         var destinationRoms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var allExtensions = _validRomExtensions.Concat(_validChdExtensions).ToHashSet();
 
         try
         {
+            Console.WriteLine($"DEBUG: Getting files from destination directory...");
             var files = Directory.GetFiles(destinationPath, "*.*", SearchOption.AllDirectories)
                 .Where(f => allExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
                 .ToList();
+            
+            Console.WriteLine($"DEBUG: Found {files.Count} files in destination directory");
 
             foreach (var file in files)
             {
@@ -370,7 +439,8 @@ public class RomScanner
             }
 
             progress?.Report($"Marked {markedCount} ROMs as being in destination");
-            return Task.FromResult(destinationRoms.Count);
+            Console.WriteLine($"DEBUG: Destination scan complete. Found {destinationRoms.Count} ROMs, marked {markedCount}");
+            return Task.FromResult(markedCount);
         }
         catch (Exception ex)
         {
@@ -387,6 +457,15 @@ public class ChdInfo
 {
     public List<string> ChdFiles { get; set; } = new();
     public long TotalSize { get; set; }
+}
+
+/// <summary>
+/// Result of CHD directory scanning
+/// </summary>
+public class ChdScanResult
+{
+    public Dictionary<string, ChdInfo> Lookup { get; set; } = new();
+    public int TotalDirectories { get; set; }
 }
 
 /// <summary>

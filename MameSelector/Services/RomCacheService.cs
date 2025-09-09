@@ -50,7 +50,7 @@ public class RomCacheService
     /// <summary>
     /// Saves the scanned ROM data to cache
     /// </summary>
-    public async Task SaveCacheAsync(Dictionary<string, ScannedRom> scannedRoms, AppSettings settings, IProgress<string>? progress = null)
+    public async Task SaveCacheAsync(Dictionary<string, ScannedRom> scannedRoms, AppSettings settings, int totalChdDirectories = 0, IProgress<string>? progress = null)
     {
         try
         {
@@ -66,7 +66,8 @@ public class RomCacheService
                 RomRepositoryHash = string.Empty, // Skip hash calculation for speed
                 CHDRepositoryHash = null, // Skip hash calculation for speed
                 MameXmlHash = null, // Skip hash calculation for speed
-                ScannedRoms = scannedRoms
+                ScannedRoms = scannedRoms,
+                TotalChdDirectories = totalChdDirectories
             };
 
             progress?.Report("Serializing cache data... (90%)");
@@ -88,6 +89,37 @@ public class RomCacheService
         catch (Exception)
         {
             // Log error but don't throw - caching is optional
+        }
+    }
+
+    /// <summary>
+    /// Gets the total CHD directory count from the cache
+    /// </summary>
+    public async Task<int> GetTotalChdDirectoriesFromCacheAsync()
+    {
+        try
+        {
+            if (!File.Exists(_cacheFilePath))
+            {
+                Console.WriteLine($"DEBUG: Cache file does not exist: {_cacheFilePath}");
+                return 0;
+            }
+
+            var json = await File.ReadAllTextAsync(_cacheFilePath);
+            var options = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
+
+            var cacheData = JsonSerializer.Deserialize<RomCacheData>(json, options);
+            var result = cacheData?.TotalChdDirectories ?? 0;
+            Console.WriteLine($"DEBUG: Retrieved TotalChdDirectories from cache: {result}");
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"DEBUG: Error retrieving TotalChdDirectories from cache: {ex.Message}");
+            return 0;
         }
     }
 
@@ -336,6 +368,7 @@ public class RomCacheData
     public string? CHDRepositoryHash { get; set; }
     public string? MameXmlHash { get; set; }
     public Dictionary<string, ScannedRom> ScannedRoms { get; set; } = new();
+    public int TotalChdDirectories { get; set; } // Store total CHD directories found during scan
 }
 
 /// <summary>

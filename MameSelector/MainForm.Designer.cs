@@ -357,7 +357,7 @@ partial class MainForm
         detailsGroupBox.Size = new Size(1800, 329);
         detailsGroupBox.TabIndex = 2;
         detailsGroupBox.TabStop = false;
-        detailsGroupBox.Text = "ROM Details & Debug Log";
+        detailsGroupBox.Text = "ROM Details & Console";
 
         // 
         // detailsSplitContainer
@@ -399,7 +399,7 @@ partial class MainForm
         debugLogTextBox.ScrollBars = ScrollBars.Vertical;
         debugLogTextBox.Size = new Size(897, 307);
         debugLogTextBox.TabIndex = 0;
-        debugLogTextBox.Text = "Debug Log:\r\n";
+        debugLogTextBox.Text = "Console:\r\n";
 
         // 
         // destinationListView

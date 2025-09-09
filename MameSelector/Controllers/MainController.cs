@@ -22,6 +22,7 @@ public class MainController
     private AppSettings _settings;
     private Dictionary<string, ScannedRom> _scannedRoms = new();
     private bool _isLoading;
+    private int _totalChdDirectories = 0;
 
     public event EventHandler<StatusUpdateEventArgs>? StatusUpdated;
     public event EventHandler<LoadingStateChangedEventArgs>? LoadingStateChanged;
@@ -268,39 +269,20 @@ public class MainController
                 _mainForm?.UpdateRomCount(cachedRoms.Count);
                 var chdCount = cachedRoms.Values.Count(r => r.ChdFiles?.Count > 0);
                 
-                // For cache loading, we need to calculate total CHD directories from the cached data
-                // This is the total number of unique CHD directories that were found during the original scan
-                var totalChdDirectories = cachedRoms.Values.Count(r => r.ChdFiles?.Count > 0);
+                // Get the stored total CHD directory count from cache, or fall back to counting ROMs with CHDs
+                var totalChdDirectories = await _cacheService.GetTotalChdDirectoriesFromCacheAsync();
+                _mainForm?.LogConsole($"Cache load: Retrieved TotalChdDirectories from cache: {totalChdDirectories}");
+                
+                if (totalChdDirectories == 0)
+                {
+                    totalChdDirectories = cachedRoms.Values.Count(r => r.ChdFiles?.Count > 0);
+                    _mainForm?.LogConsole($"Cache load: Fallback to counting ROMs with CHDs: {totalChdDirectories}");
+                }
                 _mainForm?.UpdateChdCount(totalChdDirectories);
                 
                 // Debug: Log CHD count calculation
-                _mainForm?.LogDebug($"Cache load: Total ROMs: {cachedRoms.Count}, CHDs: {chdCount}");
+                _mainForm?.LogConsole($"Cache load: Total ROMs: {cachedRoms.Count}, CHDs: {chdCount}");
                 
-                // More detailed debugging
-                var romsWithChds = cachedRoms.Values.Where(r => r.ChdFiles?.Count > 0).ToList();
-                _mainForm?.LogDebug($"ROMs with CHDs found: {romsWithChds.Count}");
-                
-                if (romsWithChds.Any())
-                {
-                    var sampleRom = romsWithChds.First();
-                    _mainForm?.LogDebug($"Sample ROM with CHDs: {sampleRom.Name} has {sampleRom.ChdFiles?.Count} CHD files");
-                    if (sampleRom.ChdFiles?.Any() == true)
-                    {
-                        _mainForm?.LogDebug($"First CHD file: {sampleRom.ChdFiles.First()}");
-                    }
-                }
-                else
-                {
-                    // Check if any ROMs have ChdFiles property but it's empty
-                    var romsWithEmptyChds = cachedRoms.Values.Where(r => r.ChdFiles != null && r.ChdFiles.Count == 0).Count();
-                    _mainForm?.LogDebug($"ROMs with empty ChdFiles: {romsWithEmptyChds}");
-                    
-                    // Check if any ROMs have null ChdFiles
-                    var romsWithNullChds = cachedRoms.Values.Where(r => r.ChdFiles == null).Count();
-                    _mainForm?.LogDebug($"ROMs with null ChdFiles: {romsWithNullChds}");
-                }
-                
-                _mainForm?.UpdateChdCount(chdCount);
                 
                 // Bulk update the UI with all cached ROMs at once
                 _romListView.UpdateRoms(cachedRoms.Values);
@@ -380,6 +362,7 @@ public class MainController
             
             // Step 1: Load MAME XML metadata first (run on background thread)
             progress?.Report("Loading MAME metadata...");
+            _mainForm?.LogConsole("Loading MAME XML metadata...");
             var mameGames = await Task.Run(() => _xmlParser.ParseAsync(_settings.MameXmlPath, 
                 new Progress<int>(p => progress?.Report($"Loading MAME XML... ({p}%)")), 
                 cancellationToken), cancellationToken);
@@ -388,10 +371,20 @@ public class MainController
             
             // Step 2: Scan ROMs with real-time metadata matching
             progress?.Report("Scanning ROM repository...");
+            _mainForm?.LogConsole("Starting ROM repository scan...");
             
             var scanProgress = new Progress<ScanProgress>(p => 
             {
                 progress?.Report($"{p.Phase} ({p.Percentage}%)");
+                
+                // Log important messages to console
+                if (p.Phase.Contains("Unmatched CHD directories") || 
+                    p.Phase.Contains("Sample unmatched CHD dirs") ||
+                    p.Phase.Contains("CHD Debug:") ||
+                    p.Phase.Contains("All CHD directories have corresponding ROMs"))
+                {
+                    _mainForm?.LogConsole(p.Phase);
+                }
                 
                 // Update counts based on scanning phase
                 if (p.Phase.Contains("ROM files") || p.Phase.Contains("Scanning ROMs and CHDs"))
@@ -399,18 +392,16 @@ public class MainController
                     // Update ROM count from ItemsProcessed (which represents ROM count during scanning)
                     _mainForm?.UpdateRomCount(p.ItemsProcessed);
                     
-                    // For combined scanning, also update CHD count if we have CHD data
-                    if (p.Phase.Contains("Scanning ROMs and CHDs"))
-                    {
-                        var chdCount = _scannedRoms.Values.Count(r => r.ChdFiles?.Count > 0);
-                        _mainForm?.UpdateChdCount(chdCount);
-                    }
+                    // Don't update CHD count during scanning - it will be updated at the end with the correct total
                 }
-                else if (p.Phase == "Scan Complete")
+                else if (p.Phase.Contains("Scan Complete"))
                 {
                     // Final update with all counts
                     _mainForm?.UpdateRomCount(p.ItemsProcessed);
+                    Console.WriteLine($"DEBUG: MainController calling UpdateChdCount with TotalChdDirectories: {p.TotalChdDirectories}");
+                    Console.WriteLine($"DEBUG: Scan Complete phase: '{p.Phase}'");
                     _mainForm?.UpdateChdCount(p.TotalChdDirectories); // Use total CHD directories, not ROMs with CHDs
+                    _totalChdDirectories = p.TotalChdDirectories; // Store for cache saving
                 }
             });
 
@@ -427,6 +418,8 @@ public class MainController
                 romFoundCallback, // Use silent callback like cache loading
                 metadataLookup,
                 cancellationToken), cancellationToken);
+            
+            _mainForm?.LogConsole($"ROM repository scan completed. Found {_scannedRoms.Count} ROMs");
             
             // Clear scanning state and trigger final UI update
             _romListView.SetScanningState(false);
@@ -467,7 +460,7 @@ public class MainController
 
             // Step 4: Save to cache for next time
             progress?.Report("Saving ROM cache... (85%)");
-            await _cacheService.SaveCacheAsync(_scannedRoms, _settings, progress);
+            await _cacheService.SaveCacheAsync(_scannedRoms, _settings, _totalChdDirectories, progress);
 
             UpdateStatus($"Scanned {_scannedRoms.Count:N0} ROMs successfully");
 
@@ -843,28 +836,48 @@ public class MainController
     /// </summary>
     public async Task VerifySelectedRomsAsync()
     {
+        Console.WriteLine("DEBUG: VerifySelectedRomsAsync called");
+        
         if (_romListView == null)
+        {
+            Console.WriteLine("DEBUG: _romListView is null, returning");
             return;
+        }
 
         try
         {
             var selectedRoms = _romListView.SelectedRoms.ToList();
+            Console.WriteLine($"DEBUG: Found {selectedRoms.Count} selected ROMs");
+            
             if (!selectedRoms.Any())
             {
+                Console.WriteLine("DEBUG: No ROMs selected, showing message");
                 UpdateStatus("No ROMs selected for verification");
                 return;
             }
 
+            Console.WriteLine($"DEBUG: Starting verification of {selectedRoms.Count} ROM(s)");
             UpdateStatus($"Verifying {selectedRoms.Count} ROM(s)...");
+            
+            // Show progress bar
+            _mainForm?.StartProgress($"Verifying {selectedRoms.Count} ROM(s)...");
 
             var verificationResults = new List<string>();
             var verifiedCount = 0;
             var failedCount = 0;
 
-            foreach (var rom in selectedRoms)
+            for (int i = 0; i < selectedRoms.Count; i++)
             {
+                var rom = selectedRoms[i];
+                var progress = (int)((double)(i + 1) / selectedRoms.Count * 100);
+                _mainForm?.UpdateProgress($"Verifying {rom.Name}... ({i + 1}/{selectedRoms.Count})", progress);
+                Console.WriteLine($"DEBUG: Verifying ROM: {rom.Name}");
+                Console.WriteLine($"DEBUG: ROM file path: {rom.RomFilePath}");
+                Console.WriteLine($"DEBUG: ROM has metadata: {rom.HasMetadata}");
+                
                 if (!rom.HasMetadata)
                 {
+                    Console.WriteLine($"DEBUG: ROM {rom.Name} has no metadata, skipping");
                     verificationResults.Add($"{rom.Name}: No metadata available");
                     failedCount++;
                     continue;
@@ -872,7 +885,10 @@ public class MainController
 
                 try
                 {
+                    Console.WriteLine($"DEBUG: Calling VerifyRomCrcAsync for {rom.Name}");
                     var isValid = await VerifyRomCrcAsync(rom);
+                    Console.WriteLine($"DEBUG: Verification result for {rom.Name}: {isValid}");
+                    
                     if (isValid)
                     {
                         verificationResults.Add($"{rom.Name}: ✓ Valid");
@@ -886,16 +902,38 @@ public class MainController
                 }
                 catch (Exception ex)
                 {
+                    Console.WriteLine($"DEBUG: Exception during verification of {rom.Name}: {ex.Message}");
                     verificationResults.Add($"{rom.Name}: Error - {ex.Message}");
                     failedCount++;
                 }
             }
 
             // Show results
-            var resultMessage = $"Verification Complete:\n\n" +
-                              $"✓ Valid: {verifiedCount}\n" +
-                              $"✗ Invalid/Error: {failedCount}\n\n" +
-                              $"Details:\n{string.Join("\n", verificationResults)}";
+            Console.WriteLine($"DEBUG: Verification complete - Valid: {verifiedCount}, Failed: {failedCount}");
+            
+            // Hide progress bar and show final status
+            _mainForm?.CompleteProgress("Verification complete");
+            
+            Console.WriteLine($"DEBUG: Showing results dialog");
+            
+            // Create a more manageable results message
+            var summary = $"Verification Complete:\n\n✓ Valid: {verifiedCount}\n✗ Invalid/Error: {failedCount}\n\n";
+            
+            // For large lists, show only summary and first few results
+            string detailsText;
+            if (verificationResults.Count <= 10)
+            {
+                detailsText = "Details:\n" + string.Join("\n", verificationResults);
+            }
+            else
+            {
+                var firstFew = verificationResults.Take(5);
+                detailsText = $"Details (showing first 5 of {verificationResults.Count}):\n" + 
+                             string.Join("\n", firstFew) + 
+                             $"\n\n... and {verificationResults.Count - 5} more results";
+            }
+            
+            var resultMessage = summary + detailsText;
 
             MessageBox.Show(resultMessage, "ROM Verification Results", 
                 MessageBoxButtons.OK, 
@@ -905,6 +943,8 @@ public class MainController
         }
         catch (Exception ex)
         {
+            // Hide progress bar on error
+            _mainForm?.CompleteProgress("Verification failed");
             UpdateStatus($"Error during verification: {ex.Message}");
             MessageBox.Show($"Error during verification: {ex.Message}", 
                 "Verification Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -916,34 +956,212 @@ public class MainController
     /// </summary>
     private async Task<bool> VerifyRomCrcAsync(ScannedRom rom)
     {
+        Console.WriteLine($"DEBUG: VerifyRomCrcAsync called for {rom.Name}");
+        
         if (string.IsNullOrEmpty(rom.RomFilePath) || !File.Exists(rom.RomFilePath))
+        {
+            Console.WriteLine($"DEBUG: ROM file path is null/empty or doesn't exist: {rom.RomFilePath}");
             return false;
+        }
+
+        if (!rom.HasMetadata)
+        {
+            Console.WriteLine($"DEBUG: ROM {rom.Name} has no metadata");
+            return false;
+        }
 
         return await Task.Run(() =>
         {
             try
             {
-                // For now, we'll do a basic file existence and size check
-                // In a full implementation, you would:
-                // 1. Extract the ROM file from the ZIP
-                // 2. Calculate its CRC32
-                // 3. Compare against the expected CRC from rom.Metadata.RomFiles
+                Console.WriteLine($"DEBUG: Processing ROM file: {rom.RomFilePath}");
                 
-                var fileInfo = new FileInfo(rom.RomFilePath);
-                if (fileInfo.Length == 0)
-                    return false;
+                // Check if it's a ZIP file
+                if (Path.GetExtension(rom.RomFilePath).Equals(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine($"DEBUG: ROM {rom.Name} is a ZIP file, calling VerifyZipRomCrc");
+                    var result = VerifyZipRomCrc(rom);
+                    Console.WriteLine($"DEBUG: VerifyZipRomCrc result for {rom.Name}: {result}");
+                    return result;
+                }
+                else
+                {
+                    Console.WriteLine($"DEBUG: ROM {rom.Name} is not a ZIP file, verifying single file");
+                    // For non-ZIP files, verify the single file
+                    var expectedRomFile = rom.Metadata.RomFiles.FirstOrDefault();
+                    if (expectedRomFile == null || string.IsNullOrEmpty(expectedRomFile.CRC))
+                    {
+                        Console.WriteLine($"DEBUG: No expected ROM file or CRC for {rom.Name}");
+                        return false;
+                    }
 
-                // Basic validation - file exists and has content
-                // For now, we just verify the file exists and has content
-                // Future enhancement: Implement actual CRC verification against rom.Metadata.RomFiles
-                return true;
+                    Console.WriteLine($"DEBUG: Expected CRC for {rom.Name}: {expectedRomFile.CRC}");
+                    var actualCrc = CalculateFileCrc32(rom.RomFilePath);
+                    Console.WriteLine($"DEBUG: Actual CRC for {rom.Name}: {actualCrc}");
+                    
+                    var matches = string.Equals(actualCrc, expectedRomFile.CRC, StringComparison.OrdinalIgnoreCase);
+                    Console.WriteLine($"DEBUG: CRC match for {rom.Name}: {matches}");
+                    return matches;
+                }
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"DEBUG: Exception in VerifyRomCrcAsync for {rom.Name}: {ex.Message}");
                 return false;
             }
         });
     }
+
+    /// <summary>
+    /// Verifies CRC of files inside a ZIP ROM archive
+    /// </summary>
+    private bool VerifyZipRomCrc(ScannedRom rom)
+    {
+        Console.WriteLine($"DEBUG: VerifyZipRomCrc called for {rom.Name}");
+        
+        try
+        {
+            Console.WriteLine($"DEBUG: Opening ZIP archive: {rom.RomFilePath}");
+            using var archive = System.IO.Compression.ZipFile.OpenRead(rom.RomFilePath);
+            
+            // Create a lookup dictionary for expected CRCs by filename
+            var expectedCrcs = rom.Metadata.RomFiles.ToDictionary(
+                rf => rf.Name, 
+                rf => rf.CRC, 
+                StringComparer.OrdinalIgnoreCase
+            );
+            
+            Console.WriteLine($"DEBUG: Expected CRCs for {rom.Name}: {expectedCrcs.Count} files");
+            foreach (var kvp in expectedCrcs)
+            {
+                Console.WriteLine($"DEBUG: Expected {kvp.Key}: {kvp.Value}");
+            }
+
+            // Verify each file in the ZIP
+            foreach (var entry in archive.Entries)
+            {
+                if (string.IsNullOrEmpty(entry.Name)) // Skip directory entries
+                {
+                    Console.WriteLine($"DEBUG: Skipping directory entry: {entry.FullName}");
+                    continue;
+                }
+
+                Console.WriteLine($"DEBUG: Processing ZIP entry: {entry.Name}");
+
+                // Check if we have expected CRC for this file
+                if (!expectedCrcs.TryGetValue(entry.Name, out var expectedCrc) || string.IsNullOrEmpty(expectedCrc))
+                {
+                    Console.WriteLine($"DEBUG: No expected CRC for {entry.Name}, skipping");
+                    continue;
+                }
+
+                Console.WriteLine($"DEBUG: Expected CRC for {entry.Name}: {expectedCrc}");
+
+                // Calculate CRC of the file inside the ZIP
+                using var entryStream = entry.Open();
+                var actualCrc = CalculateStreamCrc32(entryStream);
+                Console.WriteLine($"DEBUG: Actual CRC for {entry.Name}: {actualCrc}");
+                
+                // Compare with expected CRC
+                var matches = string.Equals(actualCrc, expectedCrc, StringComparison.OrdinalIgnoreCase);
+                Console.WriteLine($"DEBUG: CRC match for {entry.Name}: {matches}");
+                
+                if (!matches)
+                {
+                    Console.WriteLine($"DEBUG: CRC mismatch for {entry.Name}, returning false");
+                    return false; // At least one file doesn't match
+                }
+            }
+
+            Console.WriteLine($"DEBUG: All files in {rom.Name} match, returning true");
+            return true; // All files match
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"DEBUG: Exception in VerifyZipRomCrc for {rom.Name}: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Calculates CRC32 of a stream
+    /// </summary>
+    private string CalculateStreamCrc32(Stream stream)
+    {
+        var buffer = new byte[8192];
+        uint crc = 0xFFFFFFFF;
+        int bytesRead;
+        
+        while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            for (int i = 0; i < bytesRead; i++)
+            {
+                crc = Crc32Table[(crc ^ buffer[i]) & 0xFF] ^ (crc >> 8);
+            }
+        }
+        
+        return (crc ^ 0xFFFFFFFF).ToString("X8");
+    }
+
+    /// <summary>
+    /// Calculates CRC32 of a file
+    /// </summary>
+    private string CalculateFileCrc32(string filePath)
+    {
+        using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+        
+        var buffer = new byte[8192];
+        uint crc = 0xFFFFFFFF;
+        int bytesRead;
+        
+        while ((bytesRead = fileStream.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            for (int i = 0; i < bytesRead; i++)
+            {
+                crc = Crc32Table[(crc ^ buffer[i]) & 0xFF] ^ (crc >> 8);
+            }
+        }
+        
+        return (crc ^ 0xFFFFFFFF).ToString("X8");
+    }
+
+    /// <summary>
+    /// CRC32 lookup table
+    /// </summary>
+    private static readonly uint[] Crc32Table = {
+        0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA, 0x076DC419, 0x706AF48F, 0xE963A535, 0x9E6495A3,
+        0x0EDB8832, 0x79DCB8A4, 0xE0D5E91E, 0x97D2D988, 0x09B64C2B, 0x7EB17CBD, 0xE7B82D07, 0x90BF1D91,
+        0x1DB71064, 0x6AB020F2, 0xF3B97148, 0x84BE41DE, 0x1ADAD47D, 0x6DDDE4EB, 0xF4D4B551, 0x83D385C7,
+        0x136C9856, 0x646BA8C0, 0xFD62F97A, 0x8A65C9EC, 0x14015C4F, 0x63066CD9, 0xFA0F3D63, 0x8D080DF5,
+        0x3B6E20C8, 0x4C69105E, 0xD56041E4, 0xA2677172, 0x3C03E4D1, 0x4B04D447, 0xD20D85FD, 0xA50AB56B,
+        0x35B5A8FA, 0x42B2986C, 0xDBBBC9D6, 0xACBCF940, 0x32D86CE3, 0x45DF5C75, 0xDCD60DCF, 0xABD13D59,
+        0x26D930AC, 0x51DE003A, 0xC8D75180, 0xBFD06116, 0x21B4F4B5, 0x56B3C423, 0xCFBA9599, 0xB8BDA50F,
+        0x2802B89E, 0x5F058808, 0xC60CD9B2, 0xB10BE924, 0x2F6F7C87, 0x58684C11, 0xC1611DAB, 0xB6662D3D,
+        0x76DC4190, 0x01DB7106, 0x98D220BC, 0xEFD5102A, 0x71B18589, 0x06B6B51F, 0x9FBFE4A5, 0xE8B8D433,
+        0x7807C9A2, 0x0F00F934, 0x9609A88E, 0xE10E9818, 0x7F6A0DBB, 0x086D3D2D, 0x91646C97, 0xE6635C01,
+        0x6B6B51F4, 0x1C6C6162, 0x856530D8, 0xF262004E, 0x6C0695ED, 0x1B01A57B, 0x8208F4C1, 0xF50FC457,
+        0x65B0D9C6, 0x12B7E950, 0x8BBEB8EA, 0xFCB9887C, 0x62DD1DDF, 0x15DA2D49, 0x8CD37CF3, 0xFBD44C65,
+        0x4DB26158, 0x3AB551CE, 0xA3BC0074, 0xD4BB30E2, 0x4ADFA541, 0x3DD895D7, 0xA4D1C46D, 0xD3D6F4FB,
+        0x4369E96A, 0x346ED9FC, 0xAD678846, 0xDA60B8D0, 0x44042D73, 0x33031DE5, 0xAA0A4C5F, 0xDD0D7CC9,
+        0x5005713C, 0x270241AA, 0xBE0B1010, 0xC90C2086, 0x5768B525, 0x206F85B3, 0xB966D409, 0xCE61E49F,
+        0x5EDEF90E, 0x29D9C998, 0xB0D09822, 0xC7D7A8B4, 0x59B33D17, 0x2EB40D81, 0xB7BD5C3B, 0xC0BA6CAD,
+        0xEDB88320, 0x9ABFB3B6, 0x03B6E20C, 0x74B1D29A, 0xEAD54739, 0x9DD277AF, 0x04DB2615, 0x73DC1683,
+        0xE3630B12, 0x94643B84, 0x0D6D6A3E, 0x7A6A5AA8, 0xE40ECF0B, 0x9309FF9D, 0x0A00AE27, 0x7D079EB1,
+        0xF00F9344, 0x8708A3D2, 0x1E01F268, 0x6906C2FE, 0xF762575D, 0x806567CB, 0x196C3671, 0x6E6B06E7,
+        0xFED41B76, 0x89D32BE0, 0x10DA7A5A, 0x67DD4ACC, 0xF9B9DF6F, 0x8EBEEFF9, 0x17B7BE43, 0x60B08ED5,
+        0xD6D6A3E8, 0xA1D1937E, 0x38D8C2C4, 0x4FDFF252, 0xD1BB67F1, 0xA6BC5767, 0x3FB506DD, 0x48B2364B,
+        0xD80D2BDA, 0xAF0A1B4C, 0x36034AF6, 0x41047A60, 0xDF60EFC3, 0xA867DF55, 0x316E8EEF, 0x4669BE79,
+        0xCB61B38C, 0xBC66831A, 0x256FD2A0, 0x5268E236, 0xCC0C7795, 0xBB0B4703, 0x220216B9, 0x5505262F,
+        0xC5BA3BBE, 0xB2BD0B28, 0x2BB45A92, 0x5CB36A04, 0xC2D7FFA7, 0xB5D0CF31, 0x2CD99E8B, 0x5BDEAE1D,
+        0x9B64C2B0, 0xEC63F226, 0x756AA39C, 0x026D930A, 0x9C0906A9, 0xEB0E363F, 0x72076785, 0x05005713,
+        0x95BF4A82, 0xE2B87A14, 0x7BB12BAE, 0x0CB61B38, 0x92D28E9B, 0xE5D5BE0D, 0x7CDCEFB7, 0x0BDBDF21,
+        0x86D3D2D4, 0xF1D4E242, 0x68DDB3F8, 0x1FDA836E, 0x81BE16CD, 0xF6B9265B, 0x6FB077E1, 0x18B74777,
+        0x88085AE6, 0xFF0F6A70, 0x66063BCA, 0x11010B5C, 0x8F659EFF, 0xF862AE69, 0x616BFFD3, 0x166CCF45,
+        0xA00AE278, 0xD70DD2EE, 0x4E048354, 0x3903B3C2, 0xA7672661, 0xD06016F7, 0x4969474D, 0x3E6E77DB,
+        0xAED16A4A, 0xD9D65ADC, 0x40DF0B66, 0x37D83BF0, 0xA9BCAE53, 0xDEBB9EC5, 0x47B2CF7F, 0x30B5FFE9,
+        0xBDBDF21C, 0xCABAC28A, 0x53B39330, 0x24B4A3A6, 0xBAD03605, 0xCDD70693, 0x54DE5729, 0x23D967BF,
+        0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94, 0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D
+    };
 
     /// <summary>
     /// Deletes selected ROMs from the destination directory
