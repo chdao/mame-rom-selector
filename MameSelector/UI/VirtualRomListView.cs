@@ -63,6 +63,9 @@ public class VirtualRomListView
         _refreshTimer.Start();
         
         SetupListView();
+        
+        // Adjust column widths after setup
+        AdjustColumnWidths();
     }
 
     /// <summary>
@@ -108,9 +111,6 @@ public class VirtualRomListView
             _listView.Columns[3].Width = 60;  // Year
             _listView.Columns[4].Width = 50;  // CHD
             _listView.Columns[5].Width = 120; // Size
-            
-            // Set the Description column to auto-resize to fill remaining space
-            _listView.Columns[2].AutoResize(ColumnHeaderAutoResizeStyle.None);
         }
     }
 
@@ -159,6 +159,9 @@ public class VirtualRomListView
     {
         _allRoms = roms.ToList();
         ApplyFilter(_currentFilter, true); // Will be updated when settings change
+        
+        // Adjust column widths after updating ROMs
+        AdjustColumnWidths();
     }
 
     /// <summary>
