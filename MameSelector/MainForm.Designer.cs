@@ -308,7 +308,7 @@ partial class MainForm
         mainSplitContainer.Panel1.Controls.Add(romsSplitContainer);
         mainSplitContainer.Panel2.Controls.Add(bottomSplitContainer);
         mainSplitContainer.Size = new Size(2200, 929);
-        mainSplitContainer.SplitterDistance = 600;
+        mainSplitContainer.SplitterDistance = 500;
         mainSplitContainer.TabIndex = 0;
 
         // 

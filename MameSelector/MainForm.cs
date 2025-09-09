@@ -556,15 +556,15 @@ public partial class MainForm : Form
             details.Add($"CHD Files: {rom.ChdFiles.Count}");
             details.Add($"Total Size: {FormatFileSize(rom.TotalSize)}");
             details.Add("");
-            details.Add("CHD Files:");
-            foreach (var chdFile in rom.ChdFiles.Take(8))
+            
+            // Display CHD files on a single line, comma-separated
+            var chdFileNames = rom.ChdFiles.Select(f => Path.GetFileName(f)).ToList();
+            var chdList = string.Join(", ", chdFileNames);
+            if (chdList.Length > 100) // Truncate if too long
             {
-                details.Add($"  {Path.GetFileName(chdFile)}");
+                chdList = chdList.Substring(0, 97) + "...";
             }
-            if (rom.ChdFiles.Count > 8)
-            {
-                details.Add($"  ... and {rom.ChdFiles.Count - 8} more");
-            }
+            details.Add($"CHD Files: {chdList}");
         }
         else
         {
