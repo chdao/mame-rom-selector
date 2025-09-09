@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g., v0.3.3)'
+        description: 'Release version (e.g., v0.4.2)'
         required: true
-        default: 'v0.3.3'
+        default: 'v0.4.2'
       release_notes:
         description: 'Release notes'
         required: false
@@ -23,6 +23,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
+    - name: Extract version from project file
+      id: version
+      run: |
+        $version = Select-Xml -Path "MameSelector/MameSelector.csproj" -XPath "//AssemblyVersion" | Select-Object -ExpandProperty Node | Select-Object -ExpandProperty InnerText
+        $version = $version -replace '\.0$', ''  # Remove trailing .0
+        $version = "v$version"
+        echo "version=$version" >> $env:GITHUB_OUTPUT
+        echo "Extracted version: $version"
+      
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
@@ -34,10 +43,10 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ github.event.inputs.version }}
-        name: MAME ROM Selector ${{ github.event.inputs.version }}
+        tag_name: ${{ github.event.inputs.version || steps.version.outputs.version }}
+        name: MAME ROM Selector ${{ github.event.inputs.version || steps.version.outputs.version }}
         body: |
-          ## MAME ROM Selector ${{ github.event.inputs.version }}
+          ## MAME ROM Selector ${{ github.event.inputs.version || steps.version.outputs.version }}
           
           ${{ github.event.inputs.release_notes }}
           
