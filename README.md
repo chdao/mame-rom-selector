@@ -136,18 +136,18 @@ The right panel shows ROMs already copied to destination with:
 - Delete functionality
 - Refresh capability
 
-## Recent Improvements (v0.3.3)
+## Recent Improvements (v0.4.2)
 
+- **ROM Scanning Improvements**: Fixed source ROM scanning, improved performance with background processing
+- **Verification System**: Complete CRC32 verification for ROM files with ZIP support and individual file checking
+- **Console Interface**: Renamed debug panel to "Console" with clean, useful status messages
+- **Version Management**: Dynamic versioning from assembly version, no more hardcoded versions
+- **CHD Count Fix**: Fixed status bar to show total CHD directories instead of ROMs with CHDs
+- **Progress Reporting**: Enhanced progress bars and status reporting throughout the application
+- **UI Improvements**: Better error handling, cleaner console output, improved user feedback
+- **Performance Optimization**: Parallel ROM and CHD scanning, real-time UI updates
 - **Portable Mode**: Default portable mode with cache/settings alongside executable, optional AppData mode
-- **High-Resolution Icons**: Professional icon display in About dialog with smart resolution selection
-- **Application Icon**: Professional icon implementation with proper taskbar and window display
-- **UI Cleanup**: Removed redundant toolstrip, streamlined interface
-- **Button Organization**: Logical grouping of ROM management functions
-- **Large Selection Warning**: Warns when copying more than 100 ROMs
-- **Duplicate Operation Prevention**: Guards against multiple simultaneous operations
-- **CHD Directory Management**: Proper handling of CHD directories during copy/delete
-- **Performance Optimization**: Removed unnecessary hash calculations during startup
-- **Clean Shutdown**: Fixed empty window flash during application exit
+- **Professional Icons**: High-resolution icon display with proper taskbar and window integration
 
 ## Technical Details
 
@@ -167,9 +167,10 @@ This project follows semantic versioning (SemVer) with the format `MAJOR.MINOR.P
 - **MINOR**: New features, backwards compatible
 - **PATCH**: Bug fixes and minor improvements
 
-### Current Version: v0.3.3
+### Current Version: v0.4.2
 
 **Version History:**
+- **v0.4.2**: Major improvements to ROM scanning, verification system, console interface, and version management
 - **v0.3.3**: Self-contained application with embedded icon, startup crash fixes
 - **v0.3.0**: Initial stable release with core functionality
 
