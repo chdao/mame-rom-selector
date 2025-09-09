@@ -281,7 +281,7 @@ public class MainController
                 _mainForm?.UpdateChdCount(totalChdDirectories);
                 
                 // Debug: Log CHD count calculation
-                _mainForm?.LogConsole($"Cache load: Total ROMs: {cachedRoms.Count}, CHDs: {chdCount}");
+                _mainForm?.LogConsole($"Cache load: Total ROMs: {cachedRoms.Count}, CHDs: {totalChdDirectories}");
                 
                 
                 // Bulk update the UI with all cached ROMs at once
@@ -398,8 +398,6 @@ public class MainController
                 {
                     // Final update with all counts
                     _mainForm?.UpdateRomCount(p.ItemsProcessed);
-                    Console.WriteLine($"DEBUG: MainController calling UpdateChdCount with TotalChdDirectories: {p.TotalChdDirectories}");
-                    Console.WriteLine($"DEBUG: Scan Complete phase: '{p.Phase}'");
                     _mainForm?.UpdateChdCount(p.TotalChdDirectories); // Use total CHD directories, not ROMs with CHDs
                     _totalChdDirectories = p.TotalChdDirectories; // Store for cache saving
                 }

@@ -107,9 +107,7 @@ public partial class MainForm : Form
             Invoke(new Action<int>(UpdateChdCount), count);
             return;
         }
-        Console.WriteLine($"DEBUG: UpdateChdCount called with count: {count} (current label text: '{chdCountLabel.Text}')");
         chdCountLabel.Text = $"CHDs: {count:N0}";
-        Console.WriteLine($"DEBUG: UpdateChdCount updated label to: '{chdCountLabel.Text}'");
     }
 
     /// <summary>
