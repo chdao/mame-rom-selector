@@ -24,6 +24,24 @@ namespace MameSelector.UI
         }
 
         /// <summary>
+        /// Adjusts column widths when the ListView is resized
+        /// </summary>
+        public void AdjustColumnWidths()
+        {
+            if (_listView.Columns.Count >= 3)
+            {
+                // Keep Name and Size columns fixed, Description fills remaining space
+                var totalWidth = _listView.ClientSize.Width;
+                var fixedWidth = 200 + 120; // Name + Size
+                var descriptionWidth = Math.Max(200, totalWidth - fixedWidth - 20); // 20px for scrollbar
+                
+                _listView.Columns[0].Width = 200; // Name - fixed
+                _listView.Columns[1].Width = descriptionWidth; // Description - auto-resize
+                _listView.Columns[2].Width = 120; // Size - fixed
+            }
+        }
+
+        /// <summary>
         /// Sets up the ListView for destination ROMs
         /// </summary>
         private void SetupListView()
@@ -46,6 +64,9 @@ namespace MameSelector.UI
             _listView.Columns[0].Width = 200; // Name - fixed
             _listView.Columns[1].Width = 400; // Description - will auto-resize
             _listView.Columns[2].Width = 120; // Size - fixed
+            
+            // Set the Description column to auto-resize to fill remaining space
+            _listView.Columns[1].AutoResize(ColumnHeaderAutoResizeStyle.None);
 
             // Wire up events
             _listView.RetrieveVirtualItem += OnRetrieveVirtualItem;

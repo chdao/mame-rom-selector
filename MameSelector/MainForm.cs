@@ -213,6 +213,10 @@ public partial class MainForm : Form
         {
             statusLabel.Text = $"Found MAME XML: {Path.GetFileName(defaultXmlPath)}";
         }
+        
+        // Adjust column widths after form is initialized
+        _romListView.AdjustColumnWidths();
+        _destinationRomListView.AdjustColumnWidths();
     }
 
     private async Task InitializeAsync()

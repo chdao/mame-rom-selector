@@ -319,6 +319,8 @@ partial class MainForm
         romsSplitContainer.Panel2.Controls.Add(destinationGroupBox);
         romsSplitContainer.Size = new Size(2200, 600);
         romsSplitContainer.SplitterDistance = 1480;
+        romsSplitContainer.SplitterWidth = 0;
+        romsSplitContainer.IsSplitterFixed = true;
         romsSplitContainer.TabIndex = 0;
 
         // 

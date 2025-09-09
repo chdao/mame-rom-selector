@@ -108,6 +108,9 @@ public class VirtualRomListView
             _listView.Columns[3].Width = 60;  // Year
             _listView.Columns[4].Width = 50;  // CHD
             _listView.Columns[5].Width = 120; // Size
+            
+            // Set the Description column to auto-resize to fill remaining space
+            _listView.Columns[2].AutoResize(ColumnHeaderAutoResizeStyle.None);
         }
     }
 
