@@ -77,8 +77,9 @@ partial class MainForm
         destinationPanel = new Panel();
         refreshDestinationButton = new Button();
         deleteDestinationButton = new Button();
-        detailsGroupBox = new GroupBox();
-        detailsSplitContainer = new SplitContainer();
+        bottomSplitContainer = new SplitContainer();
+        romDetailsGroupBox = new GroupBox();
+        consoleGroupBox = new GroupBox();
         detailsTextBox = new TextBox();
         debugLogTextBox = new TextBox();
         searchPanel = new Panel();
@@ -95,10 +96,12 @@ partial class MainForm
         statusStrip.SuspendLayout();
         mainPanel.SuspendLayout();
         romsSplitContainer.SuspendLayout();
+        bottomSplitContainer.SuspendLayout();
         gamesGroupBox.SuspendLayout();
         destinationGroupBox.SuspendLayout();
         destinationPanel.SuspendLayout();
-        detailsGroupBox.SuspendLayout();
+        romDetailsGroupBox.SuspendLayout();
+        consoleGroupBox.SuspendLayout();
         searchPanel.SuspendLayout();
         SuspendLayout();
 
@@ -303,7 +306,7 @@ partial class MainForm
         mainSplitContainer.Name = "mainSplitContainer";
         mainSplitContainer.Orientation = Orientation.Horizontal;
         mainSplitContainer.Panel1.Controls.Add(romsSplitContainer);
-        mainSplitContainer.Panel2.Controls.Add(detailsGroupBox);
+        mainSplitContainer.Panel2.Controls.Add(bottomSplitContainer);
         mainSplitContainer.Size = new Size(2200, 929);
         mainSplitContainer.SplitterDistance = 600;
         mainSplitContainer.TabIndex = 0;
@@ -322,6 +325,21 @@ partial class MainForm
         romsSplitContainer.SplitterWidth = 1;
         romsSplitContainer.IsSplitterFixed = true;
         romsSplitContainer.TabIndex = 0;
+
+        // 
+        // bottomSplitContainer
+        // 
+        bottomSplitContainer.Dock = DockStyle.Fill;
+        bottomSplitContainer.Location = new Point(0, 0);
+        bottomSplitContainer.Name = "bottomSplitContainer";
+        bottomSplitContainer.Orientation = Orientation.Vertical;
+        bottomSplitContainer.Panel1.Controls.Add(romDetailsGroupBox);
+        bottomSplitContainer.Panel2.Controls.Add(consoleGroupBox);
+        bottomSplitContainer.Size = new Size(2200, 329);
+        bottomSplitContainer.SplitterDistance = 1100;
+        bottomSplitContainer.SplitterWidth = 1;
+        bottomSplitContainer.IsSplitterFixed = true;
+        bottomSplitContainer.TabIndex = 0;
 
         // 
         // gamesGroupBox
@@ -350,30 +368,28 @@ partial class MainForm
         destinationGroupBox.Text = "Installed ROMs";
 
         // 
-        // detailsGroupBox
+        // romDetailsGroupBox
         // 
-        detailsGroupBox.Controls.Add(detailsSplitContainer);
-        detailsGroupBox.Dock = DockStyle.Fill;
-        detailsGroupBox.Location = new Point(0, 0);
-        detailsGroupBox.Name = "detailsGroupBox";
-        detailsGroupBox.Size = new Size(1800, 329);
-        detailsGroupBox.TabIndex = 2;
-        detailsGroupBox.TabStop = false;
-        detailsGroupBox.Text = "ROM Details & Console";
+        romDetailsGroupBox.Controls.Add(detailsTextBox);
+        romDetailsGroupBox.Dock = DockStyle.Fill;
+        romDetailsGroupBox.Location = new Point(0, 0);
+        romDetailsGroupBox.Name = "romDetailsGroupBox";
+        romDetailsGroupBox.Size = new Size(1100, 329);
+        romDetailsGroupBox.TabIndex = 0;
+        romDetailsGroupBox.TabStop = false;
+        romDetailsGroupBox.Text = "ROM Details";
 
         // 
-        // detailsSplitContainer
+        // consoleGroupBox
         // 
-        detailsSplitContainer.Dock = DockStyle.Fill;
-        detailsSplitContainer.Location = new Point(3, 19);
-        detailsSplitContainer.Name = "detailsSplitContainer";
-        detailsSplitContainer.Orientation = Orientation.Vertical;
-        detailsSplitContainer.Panel1.Controls.Add(detailsTextBox);
-        detailsSplitContainer.Panel2.Controls.Add(debugLogTextBox);
-        detailsSplitContainer.Size = new Size(1794, 307);
-        detailsSplitContainer.SplitterDistance = 897;
-        detailsSplitContainer.TabIndex = 0;
-        detailsSplitContainer.Text = "splitContainer1";
+        consoleGroupBox.Controls.Add(debugLogTextBox);
+        consoleGroupBox.Dock = DockStyle.Fill;
+        consoleGroupBox.Location = new Point(0, 0);
+        consoleGroupBox.Name = "consoleGroupBox";
+        consoleGroupBox.Size = new Size(1100, 329);
+        consoleGroupBox.TabIndex = 1;
+        consoleGroupBox.TabStop = false;
+        consoleGroupBox.Text = "Console";
 
         // 
         // detailsTextBox
@@ -607,10 +623,12 @@ partial class MainForm
         statusStrip.PerformLayout();
         mainPanel.ResumeLayout(false);
         romsSplitContainer.ResumeLayout(false);
+        bottomSplitContainer.ResumeLayout(false);
         gamesGroupBox.ResumeLayout(false);
         destinationGroupBox.ResumeLayout(false);
         destinationPanel.ResumeLayout(false);
-        detailsGroupBox.ResumeLayout(false);
+        romDetailsGroupBox.ResumeLayout(false);
+        consoleGroupBox.ResumeLayout(false);
         searchPanel.ResumeLayout(false);
         searchPanel.PerformLayout();
         ResumeLayout(false);
@@ -647,6 +665,7 @@ partial class MainForm
     private Panel mainPanel;
     private SplitContainer mainSplitContainer;
     private SplitContainer romsSplitContainer;
+    private SplitContainer bottomSplitContainer;
     private GroupBox gamesGroupBox;
     private ListView gamesListView;
     private GroupBox destinationGroupBox;
@@ -654,8 +673,8 @@ partial class MainForm
     private Panel destinationPanel;
     private Button refreshDestinationButton;
     private Button deleteDestinationButton;
-    private GroupBox detailsGroupBox;
-    private SplitContainer detailsSplitContainer;
+    private GroupBox romDetailsGroupBox;
+    private GroupBox consoleGroupBox;
     private TextBox detailsTextBox;
     private TextBox debugLogTextBox;
     private Panel searchPanel;
