@@ -111,24 +111,6 @@ namespace MameSelector.UI
             return selectedRoms;
         }
 
-        /// <summary>
-        /// Adjusts column widths when the ListView is resized
-        /// </summary>
-        public void AdjustColumnWidths()
-        {
-            if (_listView.Columns.Count >= 3)
-            {
-                // Keep Name and Size columns fixed, let Description column fill remaining space
-                var totalWidth = _listView.ClientSize.Width;
-                var nameWidth = 200;
-                var sizeWidth = 120;
-                var descriptionWidth = Math.Max(200, totalWidth - nameWidth - sizeWidth - 20); // 20px for scrollbar
-                
-                _listView.Columns[0].Width = nameWidth;
-                _listView.Columns[1].Width = descriptionWidth;
-                _listView.Columns[2].Width = sizeWidth;
-            }
-        }
 
         /// <summary>
         /// Handles virtual item retrieval
