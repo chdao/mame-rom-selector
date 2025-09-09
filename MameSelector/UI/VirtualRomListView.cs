@@ -539,6 +539,16 @@ public class VirtualRomListView
     }
 
     /// <summary>
+    /// Sorts the ROMs by name column
+    /// </summary>
+    public void SortByName()
+    {
+        _sortColumn = 1; // Name column index
+        _sortOrder = SortOrder.Ascending;
+        SortRoms();
+    }
+
+    /// <summary>
     /// Gets ROM statistics for the current filter
     /// </summary>
     public RomListStats GetStats()

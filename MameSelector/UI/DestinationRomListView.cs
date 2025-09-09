@@ -235,6 +235,16 @@ namespace MameSelector.UI
         }
 
         /// <summary>
+        /// Sorts the ROMs by name column
+        /// </summary>
+        public void SortByName()
+        {
+            _sortColumn = 0; // Name column index
+            _sortOrder = SortOrder.Ascending;
+            SortRoms();
+        }
+
+        /// <summary>
         /// Gets statistics about the destination ROMs
         /// </summary>
         public (int TotalRoms, int WithMetadata, int WithChd, long TotalSize) GetStats()

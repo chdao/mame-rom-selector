@@ -241,6 +241,7 @@ public class MainController
                 // Update UI with destination ROMs
                 _romListView.UpdateRoms(_scannedRoms.Values);
                 _destinationRomListView?.UpdateDestinationRoms(_scannedRoms.Values.ToList());
+                _destinationRomListView?.SortByName(); // Sort destination ROMs by name
                 progress?.Report($"Found {destinationCount} ROMs in destination directory");
             }
             
@@ -287,6 +288,9 @@ public class MainController
                 // Bulk update the UI with all cached ROMs at once
                 _romListView.UpdateRoms(cachedRoms.Values);
                 
+                // Sort ROMs by name after cache loading
+                _romListView.SortByName();
+                
                 // Clear scanning state after bulk update
                 _romListView.SetScanningState(false);
                 
@@ -303,6 +307,7 @@ public class MainController
                     // Refresh the UI to show destination status
                     _romListView.RefreshDisplay();
                     _destinationRomListView?.UpdateDestinationRoms(_scannedRoms.Values.ToList());
+                    _destinationRomListView?.SortByName(); // Sort destination ROMs by name
                     
                     // Update installed count in status bar
                     _mainForm?.UpdateInstalledCount(destinationCount);
@@ -425,6 +430,9 @@ public class MainController
             // Ensure all ROMs are visible in the UI (this can take time with large collections)
             progress?.Report($"Updating UI with {_scannedRoms.Count:N0} ROMs... (70%)");
             _romListView.UpdateRoms(_scannedRoms.Values);
+            
+            // Sort ROMs by name after scanning completes
+            _romListView.SortByName();
             
             // Update status bar counts from scanned ROMs
             _mainForm?.UpdateRomCount(_scannedRoms.Count);
