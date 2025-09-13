@@ -397,13 +397,8 @@ public class VirtualRomListView
             _selectedRoms.Add(rom);
         }
         
-        // Force refresh of all visible items
-        if (_filteredRoms.Count > 0)
-        {
-            _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
-            _listView.Update();
-            _listView.Invalidate();
-        }
+        // Re-sort to move selected ROMs to top
+        SortRoms();
         
         OnSelectionChanged();
     }
@@ -415,13 +410,8 @@ public class VirtualRomListView
     {
         _selectedRoms.Clear();
         
-        // Force refresh of all visible items
-        if (_filteredRoms.Count > 0)
-        {
-            _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
-            _listView.Update();
-            _listView.Invalidate();
-        }
+        // Re-sort to move selected ROMs to top
+        SortRoms();
         
         OnSelectionChanged();
     }
@@ -437,13 +427,8 @@ public class VirtualRomListView
             _selectedRoms.Add(rom);
         }
         
-        // Force refresh of all visible items
-        if (_filteredRoms.Count > 0)
-        {
-            _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
-            _listView.Update();
-            _listView.Invalidate();
-        }
+        // Re-sort to move selected ROMs to top
+        SortRoms();
         
         OnSelectionChanged();
     }
@@ -463,13 +448,8 @@ public class VirtualRomListView
             }
         }
         
-        // Force refresh of all visible items
-        if (_filteredRoms.Count > 0)
-        {
-            _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
-            _listView.Update();
-            _listView.Invalidate();
-        }
+        // Re-sort to move selected ROMs to top
+        SortRoms();
         
         OnSelectionChanged();
     }
@@ -555,7 +535,9 @@ public class VirtualRomListView
                 _selectedRoms.Remove(rom);
         }
 
-        _listView.Invalidate();
+        // Re-sort to move selected ROMs to top
+        SortRoms();
+        
         OnSelectionChanged();
     }
 
@@ -628,14 +610,9 @@ public class VirtualRomListView
             _selectedRoms.Add(rom);
         }
 
-        // Force refresh of all visible items
-        if (_filteredRoms.Count > 0)
-        {
-            _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
-            _listView.Update();
-            _listView.Invalidate();
-        }
-
+        // Re-sort to move selected ROMs to top
+        SortRoms();
+        
         OnSelectionChanged();
     }
 
@@ -703,6 +680,9 @@ public class VirtualRomListView
             _selectedRoms.Remove(rom);
         }
         
+        // Re-sort to move selected ROMs to top
+        SortRoms();
+        
         OnSelectionChanged();
     }
 
@@ -730,9 +710,8 @@ public class VirtualRomListView
                     _selectedRoms.Add(rom);
                 }
                 
-                // Force refresh of this item to update the checkbox display
-                _listView.RedrawItems(index, index, false);
-                _listView.Update();
+                // Re-sort to move selected ROMs to top
+                SortRoms();
                 
                 OnSelectionChanged();
                 
@@ -794,6 +773,16 @@ public class VirtualRomListView
 
         _filteredRoms.Sort((rom1, rom2) =>
         {
+            // First, sort by selection status (selected ROMs go to top)
+            var rom1Selected = _selectedRoms.Contains(rom1);
+            var rom2Selected = _selectedRoms.Contains(rom2);
+            
+            if (rom1Selected != rom2Selected)
+            {
+                return rom1Selected ? -1 : 1; // Selected ROMs first
+            }
+            
+            // If both have same selection status, sort by the selected column
             var comparison = _sortColumn switch
             {
                 0 => string.Compare(rom1.Name, rom2.Name, StringComparison.OrdinalIgnoreCase),
