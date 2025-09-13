@@ -11,6 +11,22 @@ namespace MameSelector.Forms
         {
             InitializeComponent();
             LoadIcon();
+            SetVersion();
+        }
+
+        private void SetVersion()
+        {
+            try
+            {
+                var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+                var versionString = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "0.4.3";
+                versionLabel.Text = $"Version {versionString}";
+            }
+            catch
+            {
+                // Fallback version if assembly version cannot be read
+                versionLabel.Text = "Version 0.4.3";
+            }
         }
 
         private void LoadIcon()
