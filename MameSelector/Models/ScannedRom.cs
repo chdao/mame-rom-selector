@@ -23,6 +23,11 @@ public class ScannedRom
     public bool IsSelected { get; set; }
     
     /// <summary>
+    /// Whether this ROM was found in destination but has no corresponding entry in the ROM collection
+    /// </summary>
+    public bool IsUnmatched { get; set; }
+    
+    /// <summary>
     /// Associated MAME metadata (populated after XML matching)
     /// </summary>
     public MameGame? Metadata { get; set; }

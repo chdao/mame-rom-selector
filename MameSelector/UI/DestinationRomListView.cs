@@ -16,6 +16,7 @@ namespace MameSelector.UI
         private List<ScannedRom> _destinationRoms = new();
         private int _sortColumn = -1;
         private SortOrder _sortOrder = SortOrder.None;
+        private bool _isAdjustingColumns = false;
 
         public DestinationRomListView(ListView listView)
         {
@@ -31,16 +32,40 @@ namespace MameSelector.UI
         /// </summary>
         public void AdjustColumnWidths()
         {
-            if (_listView.Columns.Count >= 3)
-            {
-                // Keep Name and Size columns fixed, Description fills remaining space
-                var totalWidth = _listView.ClientSize.Width;
-                var fixedWidth = 200 + 120; // Name + Size
-                var descriptionWidth = Math.Max(200, totalWidth - fixedWidth - 20); // 20px for scrollbar
+            if (_isAdjustingColumns || _listView.Columns.Count < 3)
+                return;
                 
-                _listView.Columns[0].Width = 200; // Name - fixed
-                _listView.Columns[1].Width = descriptionWidth; // Description - auto-resize
-                _listView.Columns[2].Width = 120; // Size - fixed
+            _isAdjustingColumns = true;
+            
+            try
+            {
+                var totalWidth = _listView.ClientSize.Width;
+                
+                // Fixed widths for Name and Size columns
+                var nameWidth = 200;
+                var sizeWidth = 120;
+                
+                // Calculate remaining space for description column
+                var fixedWidth = nameWidth + sizeWidth;
+                var descriptionWidth = totalWidth - fixedWidth;
+                
+                // Ensure description gets at least 200px
+                if (descriptionWidth < 200)
+                {
+                    descriptionWidth = 200;
+                }
+                
+                _listView.Columns[0].Width = nameWidth; // Name - fixed
+                _listView.Columns[1].Width = descriptionWidth; // Description - fills remaining space
+                _listView.Columns[2].Width = sizeWidth; // Size - fixed
+                
+                // Force a layout update to ensure the ListView recalculates properly
+                _listView.BeginUpdate();
+                _listView.EndUpdate();
+            }
+            finally
+            {
+                _isAdjustingColumns = false;
             }
         }
 
@@ -67,12 +92,15 @@ namespace MameSelector.UI
             _listView.Columns[0].Width = 200; // Name - fixed
             _listView.Columns[1].Width = 400; // Description - will auto-resize
             _listView.Columns[2].Width = 120; // Size - fixed
+            
+            // Note: Column resizing is allowed but will be overridden on window resize
 
             // Wire up events
             _listView.RetrieveVirtualItem += OnRetrieveVirtualItem;
             _listView.DoubleClick += OnDoubleClick;
             _listView.CacheVirtualItems += OnCacheVirtualItems;
             _listView.ColumnClick += OnColumnClick;
+            _listView.Resize += OnListViewResize;
         }
 
         /// <summary>
@@ -82,7 +110,9 @@ namespace MameSelector.UI
         {
             _destinationRoms = allRoms.Where(rom => rom.InDestination).ToList();
             _listView.VirtualListSize = _destinationRoms.Count;
-            _listView.Invalidate();
+            
+            // Apply sorting to ensure unmatched ROMs appear at the top
+            SortRoms();
             
             // Adjust column widths after updating ROMs
             AdjustColumnWidths();
@@ -132,7 +162,11 @@ namespace MameSelector.UI
             item.Tag = rom;
 
             // Color coding based on status
-            if (!rom.HasMetadata)
+            if (rom.IsUnmatched)
+            {
+                item.ForeColor = Color.Red;
+            }
+            else if (!rom.HasMetadata)
             {
                 item.ForeColor = Color.Gray;
             }
@@ -187,6 +221,15 @@ namespace MameSelector.UI
         }
 
         /// <summary>
+        /// Handles ListView resize events to adjust column widths
+        /// </summary>
+        private void OnListViewResize(object? sender, EventArgs e)
+        {
+            AdjustColumnWidths();
+        }
+
+
+        /// <summary>
         /// Sorts the ROMs based on the current sort column and order
         /// </summary>
         private void SortRoms()
@@ -195,6 +238,11 @@ namespace MameSelector.UI
 
             _destinationRoms.Sort((rom1, rom2) =>
             {
+                // Prioritize unmatched ROMs at the top
+                if (rom1.IsUnmatched && !rom2.IsUnmatched) return -1;
+                if (!rom1.IsUnmatched && rom2.IsUnmatched) return 1;
+                
+                // If both are unmatched or both are matched, sort by the selected column
                 var comparison = _sortColumn switch
                 {
                     0 => string.Compare(rom1.Name, rom2.Name, StringComparison.OrdinalIgnoreCase),
@@ -243,6 +291,7 @@ namespace MameSelector.UI
             _sortOrder = SortOrder.Ascending;
             SortRoms();
         }
+
 
         /// <summary>
         /// Gets statistics about the destination ROMs

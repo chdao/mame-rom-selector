@@ -20,7 +20,8 @@ public partial class SettingsForm : Form
             ShowBiosAndDevices = settings.ShowBiosAndDevices,
             CreateSubfolders = settings.CreateSubfolders,
             VerifyChecksums = settings.VerifyChecksums,
-            PortableMode = settings.PortableMode
+            PortableMode = settings.PortableMode,
+            ConsoleVerbosity = settings.ConsoleVerbosity
         };
 
         LoadSettingsToUI();
@@ -38,6 +39,7 @@ public partial class SettingsForm : Form
         checkBoxCreateSubfolders.Checked = Settings.CreateSubfolders;
         checkBoxVerifyChecksums.Checked = Settings.VerifyChecksums;
         checkBoxPortableMode.Checked = Settings.PortableMode;
+        comboBoxVerbosity.SelectedIndex = (int)Settings.ConsoleVerbosity;
     }
 
     private void SaveSettingsFromUI()
@@ -52,6 +54,7 @@ public partial class SettingsForm : Form
         Settings.CreateSubfolders = checkBoxCreateSubfolders.Checked;
         Settings.VerifyChecksums = checkBoxVerifyChecksums.Checked;
         Settings.PortableMode = checkBoxPortableMode.Checked;
+        Settings.ConsoleVerbosity = (VerbosityLevel)comboBoxVerbosity.SelectedIndex;
     }
 
     private void ButtonBrowseMameXml_Click(object sender, EventArgs e)

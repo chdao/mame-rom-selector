@@ -48,6 +48,8 @@ partial class SettingsForm
         checkBoxVerifyChecksums = new CheckBox();
         checkBoxPortableMode = new CheckBox();
         checkBoxShowDevices = new CheckBox();
+        labelVerbosity = new Label();
+        comboBoxVerbosity = new ComboBox();
         buttonOK = new Button();
         buttonCancel = new Button();
         
@@ -202,9 +204,11 @@ partial class SettingsForm
         groupBoxOptions.Controls.Add(checkBoxCreateSubfolders);
         groupBoxOptions.Controls.Add(checkBoxCopyDevice);
         groupBoxOptions.Controls.Add(checkBoxCopyBios);
+        groupBoxOptions.Controls.Add(labelVerbosity);
+        groupBoxOptions.Controls.Add(comboBoxVerbosity);
         groupBoxOptions.Location = new Point(12, 178);
         groupBoxOptions.Name = "groupBoxOptions";
-        groupBoxOptions.Size = new Size(560, 145);
+        groupBoxOptions.Size = new Size(560, 170);
         groupBoxOptions.TabIndex = 1;
         groupBoxOptions.TabStop = false;
         groupBoxOptions.Text = "Copy Options";
@@ -276,9 +280,30 @@ partial class SettingsForm
         checkBoxShowDevices.UseVisualStyleBackColor = true;
         
         // 
+        // labelVerbosity
+        // 
+        labelVerbosity.AutoSize = true;
+        labelVerbosity.Location = new Point(15, 120);
+        labelVerbosity.Name = "labelVerbosity";
+        labelVerbosity.Size = new Size(130, 15);
+        labelVerbosity.TabIndex = 6;
+        labelVerbosity.Text = "Debug Panel Verbosity:";
+        
+        // 
+        // comboBoxVerbosity
+        // 
+        comboBoxVerbosity.DropDownStyle = ComboBoxStyle.DropDownList;
+        comboBoxVerbosity.FormattingEnabled = true;
+        comboBoxVerbosity.Items.AddRange(new object[] { "Minimal", "Normal", "Verbose", "Debug" });
+        comboBoxVerbosity.Location = new Point(150, 117);
+        comboBoxVerbosity.Name = "comboBoxVerbosity";
+        comboBoxVerbosity.Size = new Size(120, 23);
+        comboBoxVerbosity.TabIndex = 7;
+        
+        // 
         // buttonOK
         // 
-        buttonOK.Location = new Point(416, 314);
+        buttonOK.Location = new Point(416, 339);
         buttonOK.Name = "buttonOK";
         buttonOK.Size = new Size(75, 30);
         buttonOK.TabIndex = 2;
@@ -289,7 +314,7 @@ partial class SettingsForm
         // 
         // buttonCancel
         // 
-        buttonCancel.Location = new Point(497, 314);
+        buttonCancel.Location = new Point(497, 339);
         buttonCancel.Name = "buttonCancel";
         buttonCancel.Size = new Size(75, 30);
         buttonCancel.TabIndex = 3;
@@ -302,7 +327,7 @@ partial class SettingsForm
         // 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(584, 356);
+        ClientSize = new Size(584, 381);
         Controls.Add(buttonCancel);
         Controls.Add(buttonOK);
         Controls.Add(groupBoxOptions);
@@ -343,6 +368,8 @@ partial class SettingsForm
     private CheckBox checkBoxVerifyChecksums;
     private CheckBox checkBoxPortableMode;
     private CheckBox checkBoxShowDevices;
+    private Label labelVerbosity;
+    private ComboBox comboBoxVerbosity;
     private Button buttonOK;
     private Button buttonCancel;
 }

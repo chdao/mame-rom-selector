@@ -1,6 +1,28 @@
 namespace MameSelector.Models;
 
 /// <summary>
+/// Verbosity levels for debug panel output
+/// </summary>
+public enum VerbosityLevel
+{
+    Minimal = 0,    // Only essential messages
+    Normal = 1,     // Standard messages (default)
+    Verbose = 2,    // Include debug messages
+    Debug = 3       // All messages including detailed debug info
+}
+
+/// <summary>
+/// Log levels for different types of messages
+/// </summary>
+public enum LogLevel
+{
+    Error = 0,      // Critical errors that should always be shown
+    Warning = 1,    // Warnings that should be shown in Normal+ verbosity
+    Info = 2,       // General information messages
+    Debug = 3       // Detailed debug information
+}
+
+/// <summary>
 /// Application settings for the MAME ROM Selector
 /// </summary>
 public class AppSettings
@@ -17,6 +39,9 @@ public class AppSettings
     
     // Portable mode - when true, cache and settings are stored alongside the executable
     public bool PortableMode { get; set; } = true; // Default to portable for better user experience
+    
+    // Debug panel verbosity level
+    public VerbosityLevel ConsoleVerbosity { get; set; } = VerbosityLevel.Normal; // Default to normal verbosity
     
     // Window state persistence
     public int WindowWidth { get; set; } = 1600;

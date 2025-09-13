@@ -3,6 +3,8 @@ using MameSelector.Forms;
 using MameSelector.Models;
 using MameSelector.Services;
 using MameSelector.UI;
+using System.Text;
+using System.IO;
 
 namespace MameSelector;
 
@@ -11,12 +13,13 @@ public partial class MainForm : Form
     private readonly MainController _controller;
     private readonly VirtualRomListView _romListView;
     private readonly DestinationRomListView _destinationRomListView;
+    private readonly LoggingService _loggingService;
     private CancellationTokenSource? _cancellationTokenSource;
     private bool _isCopying = false;
     private string _lastConsoleMessage = string.Empty;
 
     /// <summary>
-    /// Logs a message to the console text box (only if different from last message)
+    /// Logs a message to the debug panel text box (only if different from last message)
     /// </summary>
     public void LogConsole(string message)
     {
@@ -27,8 +30,7 @@ public partial class MainForm : Form
         }
 
         // Only log if message is different from the last one to avoid spam
-        // But allow CHD messages and other important messages through
-        if (message == _lastConsoleMessage && !IsImportantConsoleMessage(message))
+        if (message == _lastConsoleMessage)
             return;
 
         _lastConsoleMessage = message;
@@ -41,21 +43,17 @@ public partial class MainForm : Form
     }
 
     /// <summary>
-    /// Determines if a console message is important enough to always log (bypassing duplicate filter)
+    /// Updates the logging service with current settings
     /// </summary>
-    private bool IsImportantConsoleMessage(string message)
+    public void UpdateLoggingSettings(AppSettings settings)
     {
-        return message.Contains("CHD Debug:") ||
-               message.Contains("Unmatched CHD directories") ||
-               message.Contains("Sample unmatched CHD dirs") ||
-               message.Contains("All CHD directories have corresponding ROMs") ||
-               message.Contains("Cache load:") ||
-               message.Contains("ROMs with CHDs found:") ||
-               message.Contains("Sample ROM with CHDs:") ||
-               message.Contains("First CHD file:") ||
-               message.Contains("ROMs with empty ChdFiles:") ||
-               message.Contains("ROMs with null ChdFiles:");
+        _loggingService.UpdateSettings(settings);
     }
+
+    /// <summary>
+    /// Gets the logging service for use by other components
+    /// </summary>
+    public LoggingService GetLoggingService() => _loggingService;
 
     /// <summary>
     /// Determines if a progress message should be logged to the debug window
@@ -67,9 +65,7 @@ public partial class MainForm : Form
         var isPercentageUpdate = message.Contains("(") && message.Contains("%)");
         
         // Always log these important messages regardless of percentage
-        var isImportantMessage = message.Contains("Scanning destination directory...") ||
-                                message.Contains("Found") && message.Contains("ROMs in destination") ||
-                                message.Contains("Marked") && message.Contains("ROMs as being in destination") ||
+        var isImportantMessage = message.Contains("Found") && message.Contains("ROMs in destination") && message.Contains("marked") ||
                                 message.Contains("Scan Complete") ||
                                 message.Contains("Cache saved successfully") ||
                                 message.Contains("Done") ||
@@ -157,20 +153,23 @@ public partial class MainForm : Form
             System.Diagnostics.Debug.WriteLine($"Failed to load icon: {ex.Message}");
         }
         
+        // Initialize virtual list view
+        _romListView = new VirtualRomListView(gamesListView);
+        _destinationRomListView = new DestinationRomListView(destinationListView);
+        
+        // Initialize logging service
+        _loggingService = new LoggingService(this);
+        
         // Initialize services
         var settingsManager = new SettingsManager();
-        var romScanner = new RomScanner();
+        var romScanner = new RomScanner(_loggingService);
         var xmlParser = new MameXmlParser();
         var metadataService = new RomMetadataService(xmlParser);
         var cacheService = new RomCacheService();
         var copyService = new RomCopyService();
         
-        // Initialize virtual list view
-        _romListView = new VirtualRomListView(gamesListView);
-        _destinationRomListView = new DestinationRomListView(destinationListView);
-        
         // Initialize controller
-        _controller = new MainController(settingsManager, romScanner, metadataService, cacheService, xmlParser, copyService, _romListView);
+        _controller = new MainController(settingsManager, romScanner, metadataService, cacheService, xmlParser, copyService, _romListView, _loggingService);
         _controller.SetMainForm(this);
         _controller.SetDestinationListView(_destinationRomListView);
         
@@ -185,6 +184,7 @@ public partial class MainForm : Form
         _romListView.SelectionChanged += OnRomSelectionChanged;
         gamesListView.SelectedIndexChanged += OnGamesListViewSelectionChanged;
         
+        
         // Wire up resize events
         this.Resize += OnFormResize;
         romsSplitContainer.SplitterMoved += OnSplitterMoved;
@@ -192,15 +192,14 @@ public partial class MainForm : Form
         // Initialize UI
         InitializeUI();
         
-        
-        // Load settings asynchronously
-        _ = InitializeAsync();
+        // Load settings and cache asynchronously
+        _ = LoadSettingsAndCacheAsync();
     }
 
     private void InitializeUI()
     {
         var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        var versionString = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "0.4.2";
+        var versionString = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "0.4.3";
         Text = $"MAME ROM Selector v{versionString}";
         Size = new Size(1400, 900);
         StartPosition = FormStartPosition.CenterScreen;
@@ -515,67 +514,69 @@ public partial class MainForm : Form
         var totalSize = e.SelectedRoms.Sum(r => r.TotalSize);
         var sizeText = FormatFileSize(totalSize);
         statusLabel.Text = $"Selected: {e.SelectedRoms.Count:N0} ROMs ({sizeText})";
+        
     }
+
 
     private void OnGamesListViewSelectionChanged(object? sender, EventArgs e)
     {
         UpdateDetailsPanel();
     }
 
+    /// <summary>
+    /// Updates the details panel with information about the selected ROM
+    /// </summary>
     private void UpdateDetailsPanel()
     {
-        var selectedIndex = gamesListView.SelectedIndices.Count > 0 ? gamesListView.SelectedIndices[0] : -1;
-        
-        if (selectedIndex < 0)
+        if (gamesListView.SelectedIndices.Count > 0)
+        {
+            var selectedIndex = gamesListView.SelectedIndices[0];
+            if (selectedIndex >= 0 && selectedIndex < _romListView.FilteredRoms.Count)
+            {
+                var rom = _romListView.FilteredRoms[selectedIndex];
+                var details = new StringBuilder();
+                details.AppendLine($"Name: {rom.Name}");
+                details.AppendLine($"Description: {rom.DisplayName}");
+                details.AppendLine($"Manufacturer: {rom.DisplayManufacturer}");
+                details.AppendLine($"Year: {rom.DisplayYear}");
+                details.AppendLine($"Size: {FormatFileSize(rom.TotalSize)}");
+                details.AppendLine($"Has CHD: {(rom.HasChd ? "Yes" : "No")}");
+                details.AppendLine($"In Destination: {(rom.InDestination ? "Yes" : "No")}");
+                
+                if (rom.ChdFiles?.Any() == true)
+                {
+                    details.AppendLine();
+                    details.AppendLine("CHD Files:");
+                    foreach (var chd in rom.ChdFiles)
+                    {
+                        details.AppendLine($"  - {Path.GetFileName(chd)}");
+                    }
+                }
+                
+                detailsTextBox.Text = details.ToString();
+            }
+        }
+        else
         {
             detailsTextBox.Text = "Select a ROM to view details...";
-            return;
         }
-
-        var rom = _romListView.GetRomAtIndex(selectedIndex);
-        if (rom == null)
-        {
-            detailsTextBox.Text = "No ROM data available";
-            return;
-        }
-
-        var details = new List<string>();
-        
-        // Basic info - compact format
-        details.Add($"ROM: {rom.Name}");
-        details.Add($"Description: {rom.DisplayName}");
-        details.Add($"Manufacturer: {rom.DisplayManufacturer}");
-        details.Add($"Year: {rom.DisplayYear}");
-        details.Add($"Size: {FormatFileSize(rom.TotalSize)}");
-        
-        // CHD info - compact format
-        if (rom.ChdFiles.Count > 0)
-        {
-            var chdFileNames = rom.ChdFiles.Select(f => Path.GetFileName(f)).ToList();
-            var chdList = string.Join(", ", chdFileNames);
-            if (chdList.Length > 100) // Truncate if too long
-            {
-                chdList = chdList.Substring(0, 97) + "...";
-            }
-            details.Add($"CHDs ({rom.ChdFiles.Count}): {chdList}");
-        }
-        
-        // Metadata info - only show meaningful information
-        if (rom.HasMetadata && rom.Metadata != null)
-        {
-            details.Add("");
-            if (rom.IsClone && !string.IsNullOrEmpty(rom.Metadata.CloneOf))
-            {
-                details.Add($"Clone Of: {rom.Metadata.CloneOf}");
-            }
-            if (!string.IsNullOrEmpty(rom.Metadata.Category))
-            {
-                details.Add($"Category: {rom.Metadata.Category}");
-            }
-        }
-
-        detailsTextBox.Text = string.Join(Environment.NewLine, details);
     }
+
+    private void DetailsMenuItem_Click(object? sender, EventArgs e)
+    {
+        // Details panel removed - no action needed
+    }
+
+    private void DestinationDetailsMenuItem_Click(object? sender, EventArgs e)
+    {
+        // Details panel removed - no action needed
+    }
+
+    private void SelectedDetailsMenuItem_Click(object? sender, EventArgs e)
+    {
+        // Details panel removed - no action needed
+    }
+
 
     #endregion
 
@@ -646,7 +647,7 @@ public partial class MainForm : Form
                 // Only log important messages to debug window (start/completion, not percentage updates)
                 if (ShouldLogProgressMessage(message))
                 {
-                    LogConsole($"Progress: {message}");
+                    LogConsole(message);
                 }
                 
                 // Always update progress bar and status
@@ -970,6 +971,25 @@ public partial class MainForm : Form
         if (rom.IsDevice)
             return "Device";
         return "Machine";
+    }
+
+    private async Task LoadSettingsAndCacheAsync()
+    {
+        try
+        {
+            // Initialize controller and load settings
+            await _controller.InitializeAsync();
+            
+            // Update logging service with loaded settings
+            _loggingService.UpdateSettings(_controller.Settings);
+            
+            // Auto-load ROMs from cache
+            await _controller.AutoLoadRomsAsync();
+        }
+        catch (Exception ex)
+        {
+            _loggingService.LogError($"Error during initialization: {ex.Message}");
+        }
     }
 
     #endregion

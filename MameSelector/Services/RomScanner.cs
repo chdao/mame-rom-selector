@@ -7,6 +7,7 @@ namespace MameSelector.Services;
 /// </summary>
 public class RomScanner
 {
+    private readonly LoggingService? _loggingService;
     private readonly HashSet<string> _validRomExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".zip", ".7z", ".rar"
@@ -16,6 +17,11 @@ public class RomScanner
     {
         ".chd"
     };
+
+    public RomScanner(LoggingService? loggingService = null)
+    {
+        _loggingService = loggingService;
+    }
 
     /// <summary>
     /// Scans the ROM repository for available ROM files
@@ -46,24 +52,32 @@ public class RomScanner
         if (!string.IsNullOrEmpty(chdRepositoryPath) && Directory.Exists(chdRepositoryPath))
         {
             progress?.Report(new ScanProgress { Phase = "Scanning CHD directories...", Percentage = 0 });
+            _loggingService?.LogVerbose("Starting CHD directory scan...");
             var result = await ScanChdDirectoriesAsync(chdRepositoryPath, progress, cancellationToken);
             chdLookup = result.Lookup;
             totalChdDirectories = result.TotalDirectories;
+            _loggingService?.LogDebug($"Found {totalChdDirectories:N0} CHD directories ({chdLookup.Count:N0} with CHD files)");
             progress?.Report(new ScanProgress { Phase = $"Found {totalChdDirectories} CHD directories ({chdLookup.Count} with CHD files)", Percentage = 0 });
         }
         else
         {
+            _loggingService?.LogVerbose("CHD scanning skipped (no CHD path provided)");
             progress?.Report(new ScanProgress { Phase = "CHD scanning skipped (no CHD path)", Percentage = 0 });
         }
         
         // Step 2: Scan ROM files and immediately match with CHDs
         progress?.Report(new ScanProgress { Phase = "Scanning ROM files...", Percentage = 0 });
+        _loggingService?.LogVerbose("Starting ROM file scan...");
         await ScanRomFilesAsync(romRepositoryPath, scannedRoms, chdLookup, 
             progress, metadataLookup, cancellationToken);
+        _loggingService?.LogDebug($"ROM file scan completed. Found {scannedRoms.Count:N0} ROM files");
 
         // Final progress report with accurate counts
         var finalChdCount = scannedRoms.Values.Count(r => r.ChdFiles?.Count > 0);
         var totalChdFiles = scannedRoms.Values.Sum(r => r.ChdFiles?.Count ?? 0);
+        
+        // Log detailed scan summary
+        _loggingService?.LogDebug($"Scan Complete - ROMs with CHDs: {finalChdCount:N0}, Total CHD directories: {totalChdDirectories:N0}, Total CHD files: {totalChdFiles:N0}");
         
         // Debug: Log the different counts to debug window
         progress?.Report(new ScanProgress { 
@@ -150,9 +164,10 @@ public class RomScanner
                 }
 
                 var processed = Interlocked.Increment(ref processedDirs);
-                if (processed % 50 == 0 || processed == totalDirs)
+                // Only report at completion to avoid Normal level logging
+                if (processed == totalDirs)
                 {
-                    var percentage = (int)((double)processed / totalDirs * 100);
+                    var percentage = 100;
                     progress?.Report(new ScanProgress 
                     { 
                         Phase = $"Scanning CHD directories... ({processed}/{totalDirs})", 
@@ -170,11 +185,7 @@ public class RomScanner
         var matchedDirNames = chdLookup.Keys.OrderBy(n => n).ToList();
         var unmatchedDirs = allDirNamesList.Except(matchedDirNames, StringComparer.OrdinalIgnoreCase).ToList();
         
-        // Debug: Log the counts for verification
-        progress?.Report(new ScanProgress { 
-            Phase = $"CHD Debug: Total dirs found: {allDirNamesList.Count}, Matched dirs: {matchedDirNames.Count}, Unmatched dirs: {unmatchedDirs.Count}", 
-            Percentage = 100
-        });
+        // Debug logging removed - no longer needed
         
         
         if (unmatchedDirs.Any())
@@ -199,10 +210,7 @@ public class RomScanner
         }
         else
         {
-            progress?.Report(new ScanProgress { 
-                Phase = "All CHD directories have corresponding ROMs", 
-                Percentage = 100
-            });
+            // All CHD directories matched - no debug message needed
         }
         
         return new ChdScanResult
@@ -240,7 +248,7 @@ public class RomScanner
         var totalFiles = romFileInfos.Count;
 
         // Process ROMs in background - no real-time UI updates needed since scanning is fast
-        const int batchSize = 100; // Smaller batches for progress reporting
+        const int batchSize = 500; // Larger batches for better performance
         
         // Process ROMs in background
         await Task.Run(() =>
@@ -261,6 +269,7 @@ public class RomScanner
                 {
                     var romName = Path.GetFileNameWithoutExtension(fileInfo.Name);
                     
+                    
                     var scannedRom = new ScannedRom
                     {
                         Name = romName,
@@ -268,6 +277,13 @@ public class RomScanner
                         RomFileSize = fileInfo.Length,
                         LastModified = fileInfo.LastWriteTime
                     };
+                    
+                    // Debug logging for ROMs with 0 size
+                    if (fileInfo.Length == 0)
+                    {
+                        var debugMsg = $"DEBUG: ROM '{romName}' has 0 file size at {fileInfo.FullName}";
+                        _loggingService?.LogDebug(debugMsg.Replace("DEBUG: ", ""));
+                    }
 
                     // Immediately match CHD files if available
                     if (chdLookup != null && chdLookup.TryGetValue(romName, out var chdInfo))
@@ -280,12 +296,27 @@ public class RomScanner
                     if (metadataLookup != null)
                     {
                         MatchMetadata(scannedRom, metadataLookup);
+                        
+                        // Only add ROMs that exist in the XML (have metadata)
+                        if (scannedRom.HasMetadata)
+                        {
+                            // Use thread-local collection to reduce lock contention
+                            lock (batchResults)
+                            {
+                                batchResults.Add(scannedRom);
+                            }
+                        }
+                        else
+                        {
+                        }
                     }
-
-                    // Use thread-local collection to reduce lock contention
-                    lock (batchResults)
+                    else
                     {
-                        batchResults.Add(scannedRom);
+                        // If no metadata lookup, add all ROMs (fallback behavior)
+                        lock (batchResults)
+                        {
+                            batchResults.Add(scannedRom);
+                        }
                     }
                 });
                 
@@ -298,15 +329,22 @@ public class RomScanner
                     }
                 }
                 
-                // Update progress every batch
+                // Only report progress at major milestones to avoid Normal level logging
                 var processed = Math.Min(i + batchSize, romFileInfos.Count);
                 var percentage = (int)((double)processed / totalFiles * 100);
-                progress?.Report(new ScanProgress 
-                { 
-                    Phase = $"Scanning ROM files... ({processed}/{totalFiles})", 
-                    Percentage = percentage,
-                    ItemsProcessed = processed
-                });
+                
+                // Only report at start (0%), middle (50%), and completion (100%)
+                var shouldReport = (percentage == 0) || (percentage == 50) || (processed == totalFiles);
+                
+                if (shouldReport)
+                {
+                    progress?.Report(new ScanProgress 
+                    { 
+                        Phase = $"Scanning ROM files... ({processed}/{totalFiles})", 
+                        Percentage = percentage,
+                        ItemsProcessed = processed
+                    });
+                }
             }
         }, cancellationToken);
     }
@@ -364,24 +402,23 @@ public class RomScanner
     {
         if (string.IsNullOrEmpty(destinationPath) || !Directory.Exists(destinationPath))
         {
-            Console.WriteLine($"DEBUG: Destination path validation failed. Path: '{destinationPath}', Exists: {Directory.Exists(destinationPath)}");
+            _loggingService?.LogDebug($"Destination path validation failed. Path: '{destinationPath}', Exists: {Directory.Exists(destinationPath)}");
             return Task.FromResult(0);
         }
 
-        progress?.Report("Scanning destination directory...");
-        Console.WriteLine($"DEBUG: Starting destination scan of: {destinationPath}");
+        _loggingService?.LogDebug($"Starting destination scan of: {destinationPath}");
 
         var destinationRoms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var allExtensions = _validRomExtensions.Concat(_validChdExtensions).ToHashSet();
 
         try
         {
-            Console.WriteLine($"DEBUG: Getting files from destination directory...");
+            _loggingService?.LogDebug($"Getting files from destination directory...");
             var files = Directory.GetFiles(destinationPath, "*.*", SearchOption.AllDirectories)
                 .Where(f => allExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
                 .ToList();
             
-            Console.WriteLine($"DEBUG: Found {files.Count} files in destination directory");
+            _loggingService?.LogDebug($"Found {files.Count} files in destination directory");
 
             foreach (var file in files)
             {
@@ -414,11 +451,6 @@ public class RomScanner
                         }
                     }
                 }
-
-                if (destinationRoms.Count % 100 == 0)
-                {
-                    progress?.Report($"Found {destinationRoms.Count} ROMs in destination...");
-                }
             }
 
             // First, clear all InDestination flags (ROMs may have been removed)
@@ -429,17 +461,129 @@ public class RomScanner
 
             // Then mark ROMs as being in destination
             int markedCount = 0;
+            var unmatchedRoms = new List<string>();
             foreach (var romName in destinationRoms)
             {
                 if (roms.TryGetValue(romName, out var rom))
                 {
                     rom.InDestination = true;
                     markedCount++;
+                    var debugMsg = $"DEBUG: ROM '{romName}' found in collection, size: {rom.TotalSize} bytes";
+                    _loggingService?.LogDebug(debugMsg.Replace("DEBUG: ", ""));
+                    progress?.Report(debugMsg);
+                }
+                else
+                {
+                    unmatchedRoms.Add(romName);
+                    
+                    // Create a ScannedRom object for unmatched ROMs so they appear in the destination list
+                    // Find the actual ROM file with its extension
+                    string? romFilePath = null;
+                    var debugMsg1 = $"DEBUG: Looking for unmatched ROM '{romName}' in destination path: {destinationPath}";
+                    _loggingService?.LogDebug(debugMsg1.Replace("DEBUG: ", ""));
+                    progress?.Report(debugMsg1);
+                    
+                    foreach (var extension in _validRomExtensions)
+                    {
+                        var testPath = Path.Combine(destinationPath, romName + extension);
+                        var debugMsg2 = $"DEBUG: Checking path: {testPath}";
+                        _loggingService?.LogDebug(debugMsg2.Replace("DEBUG: ", ""));
+                        progress?.Report(debugMsg2);
+                        
+                        if (File.Exists(testPath))
+                        {
+                            romFilePath = testPath;
+                            var debugMsg3 = $"DEBUG: Found ROM file at: {romFilePath}";
+                            _loggingService?.LogDebug(debugMsg3.Replace("DEBUG: ", ""));
+                            progress?.Report(debugMsg3);
+                            break;
+                        }
+                    }
+                    
+                    var unmatchedRom = new ScannedRom
+                    {
+                        Name = romName,
+                        RomFilePath = romFilePath,
+                        InDestination = true,
+                        IsSelected = false,
+                        IsUnmatched = true
+                    };
+                    
+                    // Calculate file size for unmatched ROMs
+                    if (!string.IsNullOrEmpty(romFilePath) && File.Exists(romFilePath))
+                    {
+                        try
+                        {
+                            var fileInfo = new FileInfo(romFilePath);
+                            unmatchedRom.RomFileSize = fileInfo.Length;
+                            var debugMsg4 = $"DEBUG: Unmatched ROM {romName} file size: {fileInfo.Length} bytes at {romFilePath}";
+                            _loggingService?.LogDebug(debugMsg4.Replace("DEBUG: ", ""));
+                            progress?.Report(debugMsg4);
+                        }
+                        catch (Exception ex)
+                        {
+                            unmatchedRom.RomFileSize = 0;
+                            var debugMsg5 = $"DEBUG: Error getting file size for {romName}: {ex.Message}";
+                            _loggingService?.LogDebug(debugMsg5.Replace("DEBUG: ", ""));
+                            progress?.Report(debugMsg5);
+                        }
+                    }
+                    else
+                    {
+                        unmatchedRom.RomFileSize = 0;
+                        var debugMsg6 = $"DEBUG: Unmatched ROM {romName} file not found in destination directory";
+                        _loggingService?.LogDebug(debugMsg6.Replace("DEBUG: ", ""));
+                        progress?.Report(debugMsg6);
+                    }
+                    
+                    // Check for CHD files for unmatched ROMs
+                    var chdDir = Path.Combine(Path.GetDirectoryName(destinationPath) ?? "", "chd", romName);
+                    if (Directory.Exists(chdDir))
+                    {
+                        try
+                        {
+                            var chdFiles = Directory.GetFiles(chdDir, "*.chd", SearchOption.AllDirectories);
+                            if (chdFiles.Length > 0)
+                            {
+                                unmatchedRom.ChdFiles = chdFiles.ToList();
+                                unmatchedRom.TotalChdSize = chdFiles.Sum(f => new FileInfo(f).Length);
+                                _loggingService?.LogDebug($"Unmatched ROM {romName} CHD files: {chdFiles.Length}, total CHD size: {unmatchedRom.TotalChdSize} bytes");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _loggingService?.LogDebug($"Error scanning CHD files for {romName}: {ex.Message}");
+                        }
+                    }
+                    
+                    roms[romName] = unmatchedRom;
                 }
             }
 
-            progress?.Report($"Marked {markedCount} ROMs as being in destination");
-            Console.WriteLine($"DEBUG: Destination scan complete. Found {destinationRoms.Count} ROMs, marked {markedCount}");
+            // Log unmatched ROMs for debugging
+            var debugMessage = $"DEBUG: Checking unmatched ROMs. Total found: {destinationRoms.Count}, Marked: {markedCount}, Unmatched count: {unmatchedRoms.Count}";
+            _loggingService?.LogDebug(debugMessage.Replace("DEBUG: ", ""));
+            _loggingService?.LogDebug($"Unmatched ROM names: {string.Join(", ", unmatchedRoms)}");
+            progress?.Report(debugMessage);
+            
+            if (unmatchedRoms.Any())
+            {
+                var unmatchedMessage = $"Unmatched destination ROMs ({unmatchedRoms.Count}): {string.Join(", ", unmatchedRoms)}";
+                _loggingService?.LogDebug($"{unmatchedMessage}");
+                progress?.Report(unmatchedMessage);
+            }
+            else
+            {
+                var noUnmatchedMessage = "DEBUG: No unmatched ROMs found";
+                _loggingService?.LogDebug(noUnmatchedMessage.Replace("DEBUG: ", ""));
+                progress?.Report(noUnmatchedMessage);
+            }
+
+            // Single combined progress message
+            progress?.Report($"Found {destinationRoms.Count} ROMs in destination, marked {markedCount} as installed");
+            _loggingService?.LogDebug($"Destination scan complete. Found {destinationRoms.Count} ROMs, marked {markedCount}");
+            
+            
             return Task.FromResult(markedCount);
         }
         catch (Exception ex)

@@ -9,6 +9,7 @@ public class VirtualRomListView
 {
     private readonly ListView _listView;
     private readonly ToolTip _toolTip;
+    private readonly ContextMenuStrip _contextMenu;
     private List<ScannedRom> _allRoms = new();
     private List<ScannedRom> _filteredRoms = new();
     private readonly HashSet<ScannedRom> _selectedRoms = new();
@@ -39,6 +40,10 @@ public class VirtualRomListView
         _toolTip.InitialDelay = 300;
         _toolTip.AutoPopDelay = 5000;
         
+        // Initialize context menu
+        _contextMenu = new ContextMenuStrip();
+        SetupContextMenu();
+        
         // Setup refresh timer to throttle UI updates
         _refreshTimer = new System.Windows.Forms.Timer();
         _refreshTimer.Interval = 25; // 25ms delay for very responsive updates
@@ -57,6 +62,13 @@ public class VirtualRomListView
             {
                 _listView.VirtualListSize = _filteredRoms.Count;
                 _listView.Invalidate();
+                _listView.Update();
+                
+                // Force redraw of visible items
+                if (_filteredRoms.Count > 0)
+                {
+                    _listView.RedrawItems(0, Math.Min(_filteredRoms.Count - 1, _listView.ClientSize.Height / 20), false);
+                }
                 _needsRefresh = false;
             }
         };
@@ -98,19 +110,18 @@ public class VirtualRomListView
     /// </summary>
     public void AdjustColumnWidths()
     {
-        if (_listView.Columns.Count >= 6)
+        if (_listView.Columns.Count >= 5)
         {
             // Keep all columns fixed except Description, which fills remaining space
             var totalWidth = _listView.ClientSize.Width;
-            var fixedWidth = 30 + 200 + 60 + 50 + 120; // Checkbox + Name + Year + CHD + Size
+            var fixedWidth = 200 + 60 + 50 + 120; // Name + Year + CHD + Size
             var descriptionWidth = Math.Max(200, totalWidth - fixedWidth - 20); // 20px for scrollbar
             
-            _listView.Columns[0].Width = 30;  // Checkbox
-            _listView.Columns[1].Width = 200; // Name
-            _listView.Columns[2].Width = descriptionWidth; // Description - auto-resize
-            _listView.Columns[3].Width = 60;  // Year
-            _listView.Columns[4].Width = 50;  // CHD
-            _listView.Columns[5].Width = 120; // Size
+            _listView.Columns[0].Width = 200; // Name
+            _listView.Columns[1].Width = descriptionWidth; // Description - auto-resize
+            _listView.Columns[2].Width = 60;  // Year
+            _listView.Columns[3].Width = 50;  // CHD
+            _listView.Columns[4].Width = 120; // Size
         }
     }
 
@@ -124,12 +135,11 @@ public class VirtualRomListView
         _listView.View = View.Details;
         _listView.FullRowSelect = true;
         _listView.GridLines = true;
-        _listView.CheckBoxes = false;  // We'll create our own checkbox column
+        _listView.CheckBoxes = true;  // Use native Windows checkboxes
         _listView.MultiSelect = true;
 
         // Setup columns
         _listView.Columns.Clear();
-        _listView.Columns.Add("☐", 30);  // Checkbox column
         _listView.Columns.Add("Name", 200);
         _listView.Columns.Add("Description", 500);
         _listView.Columns.Add("Year", 60);
@@ -137,18 +147,18 @@ public class VirtualRomListView
         _listView.Columns.Add("Size", 120);
         
         // Set column resize behavior - only Description column should auto-resize
-        _listView.Columns[0].Width = 30;  // Checkbox - fixed
-        _listView.Columns[1].Width = 200; // Name - fixed
-        _listView.Columns[2].Width = 500; // Description - will auto-resize
-        _listView.Columns[3].Width = 60;  // Year - fixed
-        _listView.Columns[4].Width = 50;  // CHD - fixed
-        _listView.Columns[5].Width = 120; // Size - fixed
+        _listView.Columns[0].Width = 200; // Name - fixed
+        _listView.Columns[1].Width = 500; // Description - will auto-resize
+        _listView.Columns[2].Width = 60;  // Year - fixed
+        _listView.Columns[3].Width = 50;  // CHD - fixed
+        _listView.Columns[4].Width = 120; // Size - fixed
 
         // Wire up events
         _listView.RetrieveVirtualItem += OnRetrieveVirtualItem;
         _listView.DoubleClick += OnDoubleClick;
         _listView.CacheVirtualItems += OnCacheVirtualItems;
         _listView.ColumnClick += OnColumnClick;
+        _listView.ItemChecked += OnItemChecked;
         _listView.MouseClick += OnMouseClick;
     }
 
@@ -392,6 +402,7 @@ public class VirtualRomListView
         {
             _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
             _listView.Update();
+            _listView.Invalidate();
         }
         
         OnSelectionChanged();
@@ -409,6 +420,7 @@ public class VirtualRomListView
         {
             _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
             _listView.Update();
+            _listView.Invalidate();
         }
         
         OnSelectionChanged();
@@ -430,6 +442,7 @@ public class VirtualRomListView
         {
             _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
             _listView.Update();
+            _listView.Invalidate();
         }
         
         OnSelectionChanged();
@@ -455,6 +468,7 @@ public class VirtualRomListView
         {
             _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
             _listView.Update();
+            _listView.Invalidate();
         }
         
         OnSelectionChanged();
@@ -512,10 +526,17 @@ public class VirtualRomListView
         // Apply current sorting
         SortRoms();
 
-        // Update virtual list size and refresh
+        // Update virtual list size and force complete refresh
         _lastVirtualListSize = _filteredRoms.Count;
         _listView.VirtualListSize = _lastVirtualListSize;
         _listView.Invalidate();
+        _listView.Update();
+        
+        // Force redraw of visible items to ensure text appears
+        if (_filteredRoms.Count > 0)
+        {
+            _listView.RedrawItems(0, Math.Min(_filteredRoms.Count - 1, _listView.ClientSize.Height / 20), false);
+        }
     }
 
 
@@ -543,7 +564,7 @@ public class VirtualRomListView
     /// </summary>
     public void SortByName()
     {
-        _sortColumn = 1; // Name column index
+        _sortColumn = 0; // Name column index (now first column)
         _sortOrder = SortOrder.Ascending;
         SortRoms();
     }
@@ -612,6 +633,7 @@ public class VirtualRomListView
         {
             _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
             _listView.Update();
+            _listView.Invalidate();
         }
 
         OnSelectionChanged();
@@ -627,24 +649,23 @@ public class VirtualRomListView
 
         var rom = _filteredRoms[e.ItemIndex];
         
-        // First column is the checkbox
-        var checkboxText = _selectedRoms.Contains(rom) ? "✓" : "☐";
-        var item = new ListViewItem(checkboxText);
+        // First column is the name
+        var item = new ListViewItem(rom.Name);
         
-        // Second column is the name
-        item.SubItems.Add(rom.Name);
-        
-        // Third column is the description
+        // Second column is the description
         item.SubItems.Add(rom.DisplayName);
         
-        // Fourth column is the year
+        // Third column is the year
         item.SubItems.Add(rom.DisplayYear);
         
-        // Fifth column is CHD status
+        // Fourth column is CHD status
         item.SubItems.Add(rom.HasChd ? "✓" : "");
         
-        // Sixth column is size
+        // Fifth column is size
         item.SubItems.Add(FormatFileSize(rom.TotalSize));
+        
+        // Set checkbox state based on selection
+        item.Checked = _selectedRoms.Contains(rom);
 
         item.Tag = rom;
 
@@ -664,47 +685,30 @@ public class VirtualRomListView
 
 
     /// <summary>
-    /// Handles mouse click events for checkbox interaction in virtual mode
+    /// Handles item checked events for native checkboxes
     /// </summary>
-    private void OnMouseClick(object? sender, MouseEventArgs e)
+    private void OnItemChecked(object? sender, ItemCheckedEventArgs e)
     {
-        if (e.Button != MouseButtons.Left)
+        if (e.Item?.Index < 0 || e.Item?.Index >= _filteredRoms.Count)
             return;
 
-        var hitTest = _listView.HitTest(e.Location);
-        if (hitTest.Item == null)
-            return;
-
-        var itemIndex = hitTest.Item.Index;
-        if (itemIndex < 0 || itemIndex >= _filteredRoms.Count)
-            return;
-
-        var rom = _filteredRoms[itemIndex];
+        var rom = _filteredRoms[e.Item!.Index];
         
-        // Check if click is in the checkbox column (first column)
-        var checkboxColumnWidth = _listView.Columns[0].Width;
-        
-        if (e.X <= checkboxColumnWidth)
+        if (e.Item.Checked)
         {
-            // Click in checkbox column - toggle selection
-            bool wasSelected = _selectedRoms.Contains(rom);
-            if (wasSelected)
-            {
-                _selectedRoms.Remove(rom);
-            }
-            else
-            {
-                _selectedRoms.Add(rom);
-            }
-            _listView.RedrawItems(itemIndex, itemIndex, false);
-            _listView.Update();
-            OnSelectionChanged();
+            _selectedRoms.Add(rom);
         }
+        else
+        {
+            _selectedRoms.Remove(rom);
+        }
+        
+        OnSelectionChanged();
     }
 
 
     /// <summary>
-    /// Handles double-click events
+    /// Handles double-click events to toggle checkbox state
     /// </summary>
     private void OnDoubleClick(object? sender, EventArgs e)
     {
@@ -714,6 +718,25 @@ public class VirtualRomListView
             if (index >= 0 && index < _filteredRoms.Count)
             {
                 var rom = _filteredRoms[index];
+                
+                // Toggle the checkbox state
+                var wasSelected = _selectedRoms.Contains(rom);
+                if (wasSelected)
+                {
+                    _selectedRoms.Remove(rom);
+                }
+                else
+                {
+                    _selectedRoms.Add(rom);
+                }
+                
+                // Force refresh of this item to update the checkbox display
+                _listView.RedrawItems(index, index, false);
+                _listView.Update();
+                
+                OnSelectionChanged();
+                
+                // Also fire the original double-click event for any other handlers
                 RomDoubleClick?.Invoke(this, new RomDoubleClickEventArgs(rom));
             }
         }
@@ -773,12 +796,11 @@ public class VirtualRomListView
         {
             var comparison = _sortColumn switch
             {
-                0 => _selectedRoms.Contains(rom1).CompareTo(_selectedRoms.Contains(rom2)), // Checkbox column
-                1 => string.Compare(rom1.Name, rom2.Name, StringComparison.OrdinalIgnoreCase),
-                2 => string.Compare(rom1.DisplayName, rom2.DisplayName, StringComparison.OrdinalIgnoreCase),
-                3 => string.Compare(rom1.DisplayYear, rom2.DisplayYear, StringComparison.OrdinalIgnoreCase),
-                4 => rom1.HasChd.CompareTo(rom2.HasChd),
-                5 => rom1.TotalSize.CompareTo(rom2.TotalSize),
+                0 => string.Compare(rom1.Name, rom2.Name, StringComparison.OrdinalIgnoreCase),
+                1 => string.Compare(rom1.DisplayName, rom2.DisplayName, StringComparison.OrdinalIgnoreCase),
+                2 => string.Compare(rom1.DisplayYear, rom2.DisplayYear, StringComparison.OrdinalIgnoreCase),
+                3 => rom1.HasChd.CompareTo(rom2.HasChd),
+                4 => rom1.TotalSize.CompareTo(rom2.TotalSize),
                 _ => 0
             };
 
@@ -827,6 +849,168 @@ public class VirtualRomListView
     }
 
     /// <summary>
+    /// Updates the BIOS and devices filter setting
+    /// </summary>
+    public void UpdateShowBiosAndDevices(bool showBiosAndDevices)
+    {
+        // Re-apply the current filter with the new setting
+        ApplyFilter(_currentFilter, showBiosAndDevices);
+    }
+
+    /// <summary>
+    /// Forces a complete refresh of the list view display
+    /// </summary>
+    public void ForceRefresh()
+    {
+        if (InvokeRequired)
+        {
+            _listView.Invoke(new Action(ForceRefresh));
+            return;
+        }
+
+        // Force a complete refresh by updating the virtual list size and invalidating
+        _listView.VirtualListSize = _filteredRoms.Count;
+        _listView.Invalidate();
+        _listView.Update();
+        
+        // Also refresh any visible items
+        if (_filteredRoms.Count > 0)
+        {
+            _listView.RedrawItems(0, Math.Min(_filteredRoms.Count - 1, _listView.ClientSize.Height / 20), false);
+        }
+    }
+
+    /// <summary>
+    /// Sets up the context menu for ROM selection
+    /// </summary>
+    private void SetupContextMenu()
+    {
+        // Select ROM
+        var selectItem = new ToolStripMenuItem("Select ROM");
+        selectItem.Click += (s, e) => SelectHighlightedRoms();
+        _contextMenu.Items.Add(selectItem);
+        
+        // Deselect ROM
+        var deselectItem = new ToolStripMenuItem("Deselect ROM");
+        deselectItem.Click += (s, e) => DeselectHighlightedRoms();
+        _contextMenu.Items.Add(deselectItem);
+        
+        _contextMenu.Items.Add(new ToolStripSeparator());
+        
+        // Select All Visible
+        var selectAllItem = new ToolStripMenuItem("Select All Visible");
+        selectAllItem.Click += (s, e) => SelectAll();
+        _contextMenu.Items.Add(selectAllItem);
+        
+        // Clear Selection
+        var clearSelectionItem = new ToolStripMenuItem("Clear Selection");
+        clearSelectionItem.Click += (s, e) => ClearSelection();
+        _contextMenu.Items.Add(clearSelectionItem);
+        
+        _contextMenu.Items.Add(new ToolStripSeparator());
+        
+        // Select Installed ROMs
+        var selectInstalledItem = new ToolStripMenuItem("Select Installed ROMs");
+        selectInstalledItem.Click += (s, e) => SelectInstalledRoms();
+        _contextMenu.Items.Add(selectInstalledItem);
+        
+        // Invert Selection
+        var invertSelectionItem = new ToolStripMenuItem("Invert Selection");
+        invertSelectionItem.Click += (s, e) => InvertSelection();
+        _contextMenu.Items.Add(invertSelectionItem);
+    }
+
+    /// <summary>
+    /// Handles mouse click events to show context menu
+    /// </summary>
+    private void OnMouseClick(object? sender, MouseEventArgs e)
+    {
+        if (e.Button == MouseButtons.Right)
+        {
+            var hitTest = _listView.HitTest(e.Location);
+            if (hitTest.Item != null)
+            {
+                // Update context menu items based on current selection state
+                UpdateContextMenuItems();
+                
+                // Show context menu
+                _contextMenu.Show(_listView, e.Location);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates context menu items based on current selection state
+    /// </summary>
+    private void UpdateContextMenuItems()
+    {
+        var hasHighlightedRoms = _listView.SelectedIndices.Count > 0;
+        var hasSelectedRoms = _selectedRoms.Count > 0;
+        var hasVisibleRoms = _filteredRoms.Count > 0;
+        
+        // Enable/disable menu items based on current state
+        _contextMenu.Items[0].Enabled = hasHighlightedRoms; // Select ROM
+        _contextMenu.Items[1].Enabled = hasHighlightedRoms; // Deselect ROM
+        _contextMenu.Items[3].Enabled = hasVisibleRoms; // Select All Visible
+        _contextMenu.Items[4].Enabled = hasSelectedRoms; // Clear Selection
+        _contextMenu.Items[6].Enabled = hasVisibleRoms; // Select Installed ROMs
+        _contextMenu.Items[7].Enabled = hasVisibleRoms; // Invert Selection
+    }
+
+    /// <summary>
+    /// Deselects all currently highlighted ROMs
+    /// </summary>
+    private void DeselectHighlightedRoms()
+    {
+        foreach (int index in _listView.SelectedIndices)
+        {
+            if (index >= 0 && index < _filteredRoms.Count)
+            {
+                var rom = _filteredRoms[index];
+                _selectedRoms.Remove(rom);
+            }
+        }
+        
+        // Force refresh of all visible items
+        if (_filteredRoms.Count > 0)
+        {
+            _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
+            _listView.Update();
+            _listView.Invalidate();
+        }
+        
+        OnSelectionChanged();
+    }
+
+    /// <summary>
+    /// Inverts the current selection (selects unselected ROMs, deselects selected ROMs)
+    /// </summary>
+    private void InvertSelection()
+    {
+        foreach (var rom in _filteredRoms)
+        {
+            if (_selectedRoms.Contains(rom))
+            {
+                _selectedRoms.Remove(rom);
+            }
+            else
+            {
+                _selectedRoms.Add(rom);
+            }
+        }
+        
+        // Force refresh of all visible items
+        if (_filteredRoms.Count > 0)
+        {
+            _listView.RedrawItems(0, _filteredRoms.Count - 1, false);
+            _listView.Update();
+            _listView.Invalidate();
+        }
+        
+        OnSelectionChanged();
+    }
+
+    /// <summary>
     /// Disposes of resources
     /// </summary>
     public void Dispose()
@@ -834,6 +1018,7 @@ public class VirtualRomListView
         _refreshTimer?.Stop();
         _refreshTimer?.Dispose();
         _toolTip?.Dispose();
+        _contextMenu?.Dispose();
     }
 }
 

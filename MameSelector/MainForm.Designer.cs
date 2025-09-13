@@ -417,7 +417,7 @@ partial class MainForm
         debugLogTextBox.ScrollBars = ScrollBars.Vertical;
         debugLogTextBox.Size = new Size(897, 307);
         debugLogTextBox.TabIndex = 0;
-        debugLogTextBox.Text = "Console:\r\n";
+        debugLogTextBox.Text = "";
 
         // 
         // destinationListView

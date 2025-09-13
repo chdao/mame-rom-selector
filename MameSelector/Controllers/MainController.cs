@@ -16,6 +16,7 @@ public class MainController
     private readonly MameXmlParser _xmlParser;
     private readonly RomCopyService _copyService;
     private readonly VirtualRomListView _romListView;
+    private readonly LoggingService _loggingService;
     private DestinationRomListView? _destinationRomListView;
     private MainForm? _mainForm;
 
@@ -36,7 +37,8 @@ public class MainController
         RomCacheService cacheService,
         MameXmlParser xmlParser,
         RomCopyService copyService,
-        VirtualRomListView romListView)
+        VirtualRomListView romListView,
+        LoggingService loggingService)
     {
         _settingsManager = settingsManager;
         _romScanner = romScanner;
@@ -45,6 +47,7 @@ public class MainController
         _xmlParser = xmlParser;
         _copyService = copyService;
         _romListView = romListView;
+        _loggingService = loggingService;
         _settings = new AppSettings();
 
         // Wire up events
@@ -83,6 +86,11 @@ public class MainController
     public bool IsLoading => _isLoading;
 
     /// <summary>
+    /// Gets the logging service for use by other components
+    /// </summary>
+    public LoggingService Logger => _loggingService;
+
+    /// <summary>
     /// Initializes the controller and loads settings
     /// </summary>
     public async Task InitializeAsync()
@@ -94,11 +102,14 @@ public class MainController
             // Update cache service path based on portable mode setting
             _cacheService.UpdateCachePath(_settings.PortableMode);
             
-            UpdateStatus("Settings loaded successfully");
+            // Update logging service with new settings
+            _loggingService.UpdateSettings(_settings);
+            
+            _loggingService.LogInfo("Settings loaded successfully");
         }
         catch (Exception ex)
         {
-            UpdateStatus($"Error loading settings: {ex.Message}");
+            _loggingService.LogError($"Error loading settings: {ex.Message}");
         }
     }
 
@@ -140,11 +151,15 @@ public class MainController
             
             // Save settings
             await _settingsManager.SaveSettingsAsync(_settings);
-            UpdateStatus("Settings saved successfully");
+            
+            // Update logging service with new settings
+            _loggingService.UpdateSettings(_settings);
+            
+            _loggingService.LogInfo("Settings saved successfully");
         }
         catch (Exception ex)
         {
-            UpdateStatus($"Error saving settings: {ex.Message}");
+            _loggingService.LogError($"Error saving settings: {ex.Message}");
             throw;
         }
     }
@@ -166,12 +181,12 @@ public class MainController
                 
                 // Copy cache to portable location
                 File.Copy(appDataCachePath, portableCachePath, true);
-                UpdateStatus("Cache migrated to portable location");
+                _loggingService.LogInfo("Cache migrated to portable location");
             }
         }
         catch (Exception ex)
         {
-            UpdateStatus($"Warning: Could not migrate cache to portable location: {ex.Message}");
+            _loggingService.LogWarning($"Could not migrate cache to portable location: {ex.Message}");
         }
         return Task.CompletedTask;
     }
@@ -272,17 +287,16 @@ public class MainController
                 
                 // Get the stored total CHD directory count from cache, or fall back to counting ROMs with CHDs
                 var totalChdDirectories = await _cacheService.GetTotalChdDirectoriesFromCacheAsync();
-                _mainForm?.LogConsole($"Cache load: Retrieved TotalChdDirectories from cache: {totalChdDirectories}");
                 
                 if (totalChdDirectories == 0)
                 {
                     totalChdDirectories = cachedRoms.Values.Count(r => r.ChdFiles?.Count > 0);
-                    _mainForm?.LogConsole($"Cache load: Fallback to counting ROMs with CHDs: {totalChdDirectories}");
+                    _loggingService.LogDebug($"Cache load: Fallback to counting ROMs with CHDs: {totalChdDirectories}");
                 }
                 _mainForm?.UpdateChdCount(totalChdDirectories);
                 
                 // Debug: Log CHD count calculation
-                _mainForm?.LogConsole($"Cache load: Total ROMs: {cachedRoms.Count}, CHDs: {totalChdDirectories}");
+                _loggingService.LogDebug($"Cache load: Total ROMs: {cachedRoms.Count}, CHDs: {totalChdDirectories}");
                 
                 
                 // Bulk update the UI with all cached ROMs at once
@@ -301,7 +315,18 @@ public class MainController
                     var destinationCount = await _romScanner.ScanDestinationAsync(
                         _settings.DestinationPath,
                         _scannedRoms,
-                        progress,
+                        new Progress<string>(message =>
+                        {
+                            progress?.Report(message);
+                            
+                            // Log important messages to console
+                            if (message.Contains("Unmatched destination ROMs") ||
+                                message.Contains("Found") && message.Contains("ROMs in destination"))
+                            {
+                                _mainForm?.LogConsole(message);
+                            }
+                            
+                        }),
                         cancellationToken);
                     
                     // Refresh the UI to show destination status
@@ -367,28 +392,43 @@ public class MainController
             
             // Step 1: Load MAME XML metadata first (run on background thread)
             progress?.Report("Loading MAME metadata...");
-            _mainForm?.LogConsole("Loading MAME XML metadata...");
+            _loggingService.LogInfo("Loading MAME XML metadata...");
             var mameGames = await Task.Run(() => _xmlParser.ParseAsync(_settings.MameXmlPath, 
                 new Progress<int>(p => progress?.Report($"Loading MAME XML... ({p}%)")), 
                 cancellationToken), cancellationToken);
             var metadataLookup = mameGames.ToDictionary(g => g.Name, StringComparer.OrdinalIgnoreCase);
+            _loggingService.LogDebug($"Loaded {mameGames.Count:N0} MAME games from XML");
             
             
             // Step 2: Scan ROMs with real-time metadata matching
             progress?.Report("Scanning ROM repository...");
-            _mainForm?.LogConsole("Starting ROM repository scan...");
+            _loggingService.LogInfo("Starting ROM repository scan...");
+            _loggingService.LogDebug($"ROM repository path: {_settings.RomRepositoryPath}");
+            if (!string.IsNullOrEmpty(_settings.CHDRepositoryPath))
+            {
+                _loggingService.LogDebug($"CHD repository path: {_settings.CHDRepositoryPath}");
+            }
             
             var scanProgress = new Progress<ScanProgress>(p => 
             {
-                progress?.Report($"{p.Phase} ({p.Percentage}%)");
+                // Only report progress for important phases, not frequent scanning updates
+                if (!p.Phase.Contains("Scanning ROM files") || p.Percentage % 10 == 0)
+                {
+                    progress?.Report($"{p.Phase} ({p.Percentage}%)");
+                }
                 
-                // Log important messages to console
+                // Log important messages based on verbosity level
                 if (p.Phase.Contains("Unmatched CHD directories") || 
                     p.Phase.Contains("Sample unmatched CHD dirs") ||
-                    p.Phase.Contains("CHD Debug:") ||
-                    p.Phase.Contains("All CHD directories have corresponding ROMs"))
+                    p.Phase.Contains("Unmatched destination ROMs"))
                 {
-                    _mainForm?.LogConsole(p.Phase);
+                    _loggingService.LogDebug(p.Phase);
+                }
+                else if (p.Phase.Contains("Scanning CHD directories") || 
+                         p.Phase.Contains("Scanning ROM files") ||
+                         p.Phase.Contains("Found") && p.Phase.Contains("CHD directories"))
+                {
+                    _loggingService.LogVerbose(p.Phase);
                 }
                 
                 // Update counts based on scanning phase
@@ -422,17 +462,19 @@ public class MainController
                 metadataLookup,
                 cancellationToken), cancellationToken);
             
-            _mainForm?.LogConsole($"ROM repository scan completed. Found {_scannedRoms.Count} ROMs");
+            _loggingService.LogInfo($"ROM repository scan completed. Found {_scannedRoms.Count:N0} ROMs");
             
             // Clear scanning state and trigger final UI update
             _romListView.SetScanningState(false);
             
             // Ensure all ROMs are visible in the UI (this can take time with large collections)
             progress?.Report($"Updating UI with {_scannedRoms.Count:N0} ROMs... (70%)");
+            _loggingService.LogVerbose($"Updating UI with {_scannedRoms.Count:N0} ROMs...");
             _romListView.UpdateRoms(_scannedRoms.Values);
             
             // Sort ROMs by name after scanning completes
             _romListView.SortByName();
+            _loggingService.LogVerbose("ROMs sorted by name");
             
             // Update status bar counts from scanned ROMs
             _mainForm?.UpdateRomCount(_scannedRoms.Count);
@@ -444,6 +486,8 @@ public class MainController
             if (!string.IsNullOrEmpty(_settings.DestinationPath))
             {
                 progress?.Report("Scanning destination directory... (75%)");
+                _loggingService.LogInfo("Scanning destination directory...");
+                _loggingService.LogDebug($"Destination path: {_settings.DestinationPath}");
                 var destinationCount = await _romScanner.ScanDestinationAsync(
                     _settings.DestinationPath,
                     _scannedRoms,
@@ -457,17 +501,22 @@ public class MainController
                 // Update installed count in status bar
                 _mainForm?.UpdateInstalledCount(destinationCount);
                 
+                _loggingService.LogInfo($"Found {destinationCount:N0} ROMs in destination directory");
                 progress?.Report($"Found {destinationCount} ROMs in destination directory (80%)");
             }
             else
             {
+                _loggingService.LogVerbose("Skipping destination scan (no destination path)");
                 progress?.Report("Skipping destination scan (no destination path) (75%)");
             }
 
             // Step 4: Save to cache for next time
             progress?.Report("Saving ROM cache... (85%)");
+            _loggingService.LogInfo("Saving ROM cache...");
             await _cacheService.SaveCacheAsync(_scannedRoms, _settings, _totalChdDirectories, progress);
+            _loggingService.LogInfo("ROM cache saved successfully");
 
+            _loggingService.LogInfo($"Scan completed successfully - {_scannedRoms.Count:N0} ROMs processed");
             UpdateStatus($"Scanned {_scannedRoms.Count:N0} ROMs successfully");
 
             // Update statistics
@@ -478,11 +527,13 @@ public class MainController
         }
         catch (OperationCanceledException)
         {
+            _loggingService.LogWarning("ROM scanning cancelled by user");
             UpdateStatus("ROM scanning cancelled");
             throw;
         }
         catch (Exception ex)
         {
+            _loggingService.LogError($"Error scanning ROMs: {ex.Message}");
             UpdateStatus($"Error scanning ROMs: {ex.Message}");
             throw;
         }
@@ -500,6 +551,10 @@ public class MainController
     public void FilterRoms(string filter)
     {
         _romListView.ApplyFilter(filter, _settings.ShowBiosAndDevices);
+        
+        // Force a complete refresh to ensure the display updates properly
+        _romListView.ForceRefresh();
+        
         var stats = _romListView.GetStats();
         UpdateStatus($"Showing {stats.FilteredRoms} of {stats.TotalRoms} ROMs");
     }
@@ -509,7 +564,13 @@ public class MainController
     /// </summary>
     public void RefreshFilter()
     {
-        FilterRoms(_romListView.GetCurrentFilter());
+        _romListView.UpdateShowBiosAndDevices(_settings.ShowBiosAndDevices);
+        
+        // Force a complete refresh to ensure the display updates properly
+        _romListView.ForceRefresh();
+        
+        var stats = _romListView.GetStats();
+        UpdateStatus($"Showing {stats.FilteredRoms} of {stats.TotalRoms} ROMs");
     }
 
     /// <summary>
@@ -651,15 +712,20 @@ public class MainController
             progress, 
             cancellationToken);
 
-        // Update destination status for copied ROMs
+        // Update destination status for copied ROMs and deselect them
         foreach (var romName in result.CopiedRoms)
         {
             if (_scannedRoms.TryGetValue(romName, out var rom))
             {
                 rom.InDestination = true;
+                // Deselect the ROM since it's now copied
+                rom.IsSelected = false;
             }
         }
 
+        // Refresh the ROM list view to update selections
+        _romListView.RefreshSelection();
+        
         // Refresh both list views
         _romListView.RefreshDisplay();
         _destinationRomListView?.UpdateDestinationRoms(_scannedRoms.Values.ToList());
@@ -842,27 +908,27 @@ public class MainController
     /// </summary>
     public async Task VerifySelectedRomsAsync()
     {
-        Console.WriteLine("DEBUG: VerifySelectedRomsAsync called");
+        _loggingService.LogDebug("VerifySelectedRomsAsync called");
         
         if (_romListView == null)
         {
-            Console.WriteLine("DEBUG: _romListView is null, returning");
+            _loggingService.LogDebug("_romListView is null, returning");
             return;
         }
 
         try
         {
             var selectedRoms = _romListView.SelectedRoms.ToList();
-            Console.WriteLine($"DEBUG: Found {selectedRoms.Count} selected ROMs");
+            _loggingService.LogDebug($"Found {selectedRoms.Count} selected ROMs");
             
             if (!selectedRoms.Any())
             {
-                Console.WriteLine("DEBUG: No ROMs selected, showing message");
+                _loggingService.LogDebug("No ROMs selected, showing message");
                 UpdateStatus("No ROMs selected for verification");
                 return;
             }
 
-            Console.WriteLine($"DEBUG: Starting verification of {selectedRoms.Count} ROM(s)");
+            _loggingService.LogDebug($"Starting verification of {selectedRoms.Count} ROM(s)");
             UpdateStatus($"Verifying {selectedRoms.Count} ROM(s)...");
             
             // Show progress bar
@@ -877,13 +943,13 @@ public class MainController
                 var rom = selectedRoms[i];
                 var progress = (int)((double)(i + 1) / selectedRoms.Count * 100);
                 _mainForm?.UpdateProgress($"Verifying {rom.Name}... ({i + 1}/{selectedRoms.Count})", progress);
-                Console.WriteLine($"DEBUG: Verifying ROM: {rom.Name}");
-                Console.WriteLine($"DEBUG: ROM file path: {rom.RomFilePath}");
-                Console.WriteLine($"DEBUG: ROM has metadata: {rom.HasMetadata}");
+                _loggingService.LogDebug($"Verifying ROM: {rom.Name}");
+                _loggingService.LogDebug($"ROM file path: {rom.RomFilePath}");
+                _loggingService.LogDebug($"ROM has metadata: {rom.HasMetadata}");
                 
                 if (!rom.HasMetadata)
                 {
-                    Console.WriteLine($"DEBUG: ROM {rom.Name} has no metadata, skipping");
+                    _loggingService.LogDebug($"ROM {rom.Name} has no metadata, skipping");
                     verificationResults.Add($"{rom.Name}: No metadata available");
                     failedCount++;
                     continue;
@@ -891,9 +957,9 @@ public class MainController
 
                 try
                 {
-                    Console.WriteLine($"DEBUG: Calling VerifyRomCrcAsync for {rom.Name}");
+                    _loggingService.LogDebug($"Calling VerifyRomCrcAsync for {rom.Name}");
                     var isValid = await VerifyRomCrcAsync(rom);
-                    Console.WriteLine($"DEBUG: Verification result for {rom.Name}: {isValid}");
+                    _loggingService.LogDebug($"Verification result for {rom.Name}: {isValid}");
                     
                     if (isValid)
                     {
@@ -908,19 +974,19 @@ public class MainController
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"DEBUG: Exception during verification of {rom.Name}: {ex.Message}");
+                    _loggingService.LogDebug($"Exception during verification of {rom.Name}: {ex.Message}");
                     verificationResults.Add($"{rom.Name}: Error - {ex.Message}");
                     failedCount++;
                 }
             }
 
             // Show results
-            Console.WriteLine($"DEBUG: Verification complete - Valid: {verifiedCount}, Failed: {failedCount}");
+            _loggingService.LogDebug($"Verification complete - Valid: {verifiedCount}, Failed: {failedCount}");
             
             // Hide progress bar and show final status
             _mainForm?.CompleteProgress("Verification complete");
             
-            Console.WriteLine($"DEBUG: Showing results dialog");
+            _loggingService.LogDebug($"Showing results dialog");
             
             // Create a more manageable results message
             var summary = $"Verification Complete:\n\n✓ Valid: {verifiedCount}\n✗ Invalid/Error: {failedCount}\n\n";
@@ -962,17 +1028,17 @@ public class MainController
     /// </summary>
     private async Task<bool> VerifyRomCrcAsync(ScannedRom rom)
     {
-        Console.WriteLine($"DEBUG: VerifyRomCrcAsync called for {rom.Name}");
+        _loggingService.LogDebug($"VerifyRomCrcAsync called for {rom.Name}");
         
         if (string.IsNullOrEmpty(rom.RomFilePath) || !File.Exists(rom.RomFilePath))
         {
-            Console.WriteLine($"DEBUG: ROM file path is null/empty or doesn't exist: {rom.RomFilePath}");
+            _loggingService.LogDebug($"ROM file path is null/empty or doesn't exist: {rom.RomFilePath}");
             return false;
         }
 
         if (!rom.HasMetadata)
         {
-            Console.WriteLine($"DEBUG: ROM {rom.Name} has no metadata");
+            _loggingService.LogDebug($"ROM {rom.Name} has no metadata");
             return false;
         }
 
@@ -980,39 +1046,39 @@ public class MainController
         {
             try
             {
-                Console.WriteLine($"DEBUG: Processing ROM file: {rom.RomFilePath}");
+                _loggingService.LogDebug($"Processing ROM file: {rom.RomFilePath}");
                 
                 // Check if it's a ZIP file
                 if (Path.GetExtension(rom.RomFilePath).Equals(".zip", StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.WriteLine($"DEBUG: ROM {rom.Name} is a ZIP file, calling VerifyZipRomCrc");
+                    _loggingService.LogDebug($"ROM {rom.Name} is a ZIP file, calling VerifyZipRomCrc");
                     var result = VerifyZipRomCrc(rom);
-                    Console.WriteLine($"DEBUG: VerifyZipRomCrc result for {rom.Name}: {result}");
+                    _loggingService.LogDebug($"VerifyZipRomCrc result for {rom.Name}: {result}");
                     return result;
                 }
                 else
                 {
-                    Console.WriteLine($"DEBUG: ROM {rom.Name} is not a ZIP file, verifying single file");
+                    _loggingService.LogDebug($"ROM {rom.Name} is not a ZIP file, verifying single file");
                     // For non-ZIP files, verify the single file
                     var expectedRomFile = rom.Metadata.RomFiles.FirstOrDefault();
                     if (expectedRomFile == null || string.IsNullOrEmpty(expectedRomFile.CRC))
                     {
-                        Console.WriteLine($"DEBUG: No expected ROM file or CRC for {rom.Name}");
+                        _loggingService.LogDebug($"No expected ROM file or CRC for {rom.Name}");
                         return false;
                     }
 
-                    Console.WriteLine($"DEBUG: Expected CRC for {rom.Name}: {expectedRomFile.CRC}");
+                    _loggingService.LogDebug($"Expected CRC for {rom.Name}: {expectedRomFile.CRC}");
                     var actualCrc = CalculateFileCrc32(rom.RomFilePath);
-                    Console.WriteLine($"DEBUG: Actual CRC for {rom.Name}: {actualCrc}");
+                    _loggingService.LogDebug($"Actual CRC for {rom.Name}: {actualCrc}");
                     
                     var matches = string.Equals(actualCrc, expectedRomFile.CRC, StringComparison.OrdinalIgnoreCase);
-                    Console.WriteLine($"DEBUG: CRC match for {rom.Name}: {matches}");
+                    _loggingService.LogDebug($"CRC match for {rom.Name}: {matches}");
                     return matches;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"DEBUG: Exception in VerifyRomCrcAsync for {rom.Name}: {ex.Message}");
+                _loggingService.LogDebug($"Exception in VerifyRomCrcAsync for {rom.Name}: {ex.Message}");
                 return false;
             }
         });
@@ -1023,11 +1089,11 @@ public class MainController
     /// </summary>
     private bool VerifyZipRomCrc(ScannedRom rom)
     {
-        Console.WriteLine($"DEBUG: VerifyZipRomCrc called for {rom.Name}");
+        _loggingService.LogDebug($"VerifyZipRomCrc called for {rom.Name}");
         
         try
         {
-            Console.WriteLine($"DEBUG: Opening ZIP archive: {rom.RomFilePath}");
+            _loggingService.LogDebug($"Opening ZIP archive: {rom.RomFilePath}");
             using var archive = System.IO.Compression.ZipFile.OpenRead(rom.RomFilePath);
             
             // Create a lookup dictionary for expected CRCs by filename
@@ -1037,10 +1103,10 @@ public class MainController
                 StringComparer.OrdinalIgnoreCase
             );
             
-            Console.WriteLine($"DEBUG: Expected CRCs for {rom.Name}: {expectedCrcs.Count} files");
+            _loggingService.LogDebug($"Expected CRCs for {rom.Name}: {expectedCrcs.Count} files");
             foreach (var kvp in expectedCrcs)
             {
-                Console.WriteLine($"DEBUG: Expected {kvp.Key}: {kvp.Value}");
+                _loggingService.LogDebug($"Expected {kvp.Key}: {kvp.Value}");
             }
 
             // Verify each file in the ZIP
@@ -1048,43 +1114,43 @@ public class MainController
             {
                 if (string.IsNullOrEmpty(entry.Name)) // Skip directory entries
                 {
-                    Console.WriteLine($"DEBUG: Skipping directory entry: {entry.FullName}");
+                    _loggingService.LogDebug($"Skipping directory entry: {entry.FullName}");
                     continue;
                 }
 
-                Console.WriteLine($"DEBUG: Processing ZIP entry: {entry.Name}");
+                _loggingService.LogDebug($"Processing ZIP entry: {entry.Name}");
 
                 // Check if we have expected CRC for this file
                 if (!expectedCrcs.TryGetValue(entry.Name, out var expectedCrc) || string.IsNullOrEmpty(expectedCrc))
                 {
-                    Console.WriteLine($"DEBUG: No expected CRC for {entry.Name}, skipping");
+                    _loggingService.LogDebug($"No expected CRC for {entry.Name}, skipping");
                     continue;
                 }
 
-                Console.WriteLine($"DEBUG: Expected CRC for {entry.Name}: {expectedCrc}");
+                _loggingService.LogDebug($"Expected CRC for {entry.Name}: {expectedCrc}");
 
                 // Calculate CRC of the file inside the ZIP
                 using var entryStream = entry.Open();
                 var actualCrc = CalculateStreamCrc32(entryStream);
-                Console.WriteLine($"DEBUG: Actual CRC for {entry.Name}: {actualCrc}");
+                _loggingService.LogDebug($"Actual CRC for {entry.Name}: {actualCrc}");
                 
                 // Compare with expected CRC
                 var matches = string.Equals(actualCrc, expectedCrc, StringComparison.OrdinalIgnoreCase);
-                Console.WriteLine($"DEBUG: CRC match for {entry.Name}: {matches}");
+                _loggingService.LogDebug($"CRC match for {entry.Name}: {matches}");
                 
                 if (!matches)
                 {
-                    Console.WriteLine($"DEBUG: CRC mismatch for {entry.Name}, returning false");
+                    _loggingService.LogDebug($"CRC mismatch for {entry.Name}, returning false");
                     return false; // At least one file doesn't match
                 }
             }
 
-            Console.WriteLine($"DEBUG: All files in {rom.Name} match, returning true");
+            _loggingService.LogDebug($"All files in {rom.Name} match, returning true");
             return true; // All files match
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"DEBUG: Exception in VerifyZipRomCrc for {rom.Name}: {ex.Message}");
+            _loggingService.LogDebug($"Exception in VerifyZipRomCrc for {rom.Name}: {ex.Message}");
             return false;
         }
     }
@@ -1250,6 +1316,7 @@ public class MainController
         }
         return Task.CompletedTask;
     }
+
 }
 
 /// <summary>
