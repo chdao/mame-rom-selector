@@ -1,12 +1,15 @@
 name: Create Release
 
 on:
+  push:
+    branches: [ master ]
+    paths: [ 'MameSelector/MameSelector.csproj' ]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g., v0.4.2)'
+        description: 'Release version (e.g., v0.4.3)'
         required: true
-        default: 'v0.4.2'
+        default: 'v0.4.3'
       release_notes:
         description: 'Release notes'
         required: false
@@ -31,16 +34,59 @@ jobs:
         $version = "v$version"
         echo "version=$version" >> $env:GITHUB_OUTPUT
         echo "Extracted version: $version"
+    
+    - name: Check if release already exists
+      id: check_release
+      run: |
+        $version = "${{ steps.version.outputs.version }}"
+        $releases = gh release list --limit 100
+        $exists = $releases | Select-String -Pattern "^$version\s"
+        if ($exists) {
+          echo "Release $version already exists, skipping..."
+          echo "skip=true" >> $env:GITHUB_OUTPUT
+        } else {
+          echo "Release $version does not exist, proceeding..."
+          echo "skip=false" >> $env:GITHUB_OUTPUT
+        }
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Generate release notes
+      if: steps.check_release.outputs.skip == 'false'
+      id: release_notes
+      run: |
+        # Get the last release tag
+        $lastTag = gh release list --limit 1 --json tagName | ConvertFrom-Json | Select-Object -First 1 -ExpandProperty tagName
+        if (-not $lastTag) {
+          $lastTag = "HEAD~10"  # If no previous release, get last 10 commits
+        }
+        
+        # Generate changelog from commit messages
+        $commits = git log --pretty=format:"- %s" $lastTag..HEAD
+        if ($commits) {
+          $changelog = "## Changes in this release:`n`n$commits"
+        } else {
+          $changelog = "## Changes in this release`n`n- Version update and improvements"
+        }
+        
+        echo "release_notes<<EOF" >> $env:GITHUB_OUTPUT
+        echo $changelog >> $env:GITHUB_OUTPUT
+        echo "EOF" >> $env:GITHUB_OUTPUT
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
     - name: Setup .NET
+      if: steps.check_release.outputs.skip == 'false'
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '8.0.x'
         
     - name: Build Windows
+      if: steps.check_release.outputs.skip == 'false'
       run: dotnet publish MameSelector/MameSelector.csproj --configuration Release --runtime win-x64 --self-contained true --output ./publish/win-x64
         
     - name: Create Release
+      if: steps.check_release.outputs.skip == 'false'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.inputs.version || steps.version.outputs.version }}
@@ -48,7 +94,7 @@ jobs:
         body: |
           ## MAME ROM Selector ${{ github.event.inputs.version || steps.version.outputs.version }}
           
-          ${{ github.event.inputs.release_notes }}
+          ${{ github.event.inputs.release_notes || steps.release_notes.outputs.release_notes }}
           
           ### Download:
           - **Windows**: Download `MameSelector.exe`
