@@ -199,7 +199,7 @@ public partial class MainForm : Form
     private void InitializeUI()
     {
         var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        var versionString = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "0.4.3";
+        var versionString = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "0.4.4";
         Text = $"MAME ROM Selector v{versionString}";
         Size = new Size(1400, 900);
         StartPosition = FormStartPosition.CenterScreen;
