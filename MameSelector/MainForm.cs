@@ -928,9 +928,31 @@ public partial class MainForm : Form
             // Create progress reporter
             var progress = new Progress<CopyProgress>(copyProgress =>
             {
-                // Remove percentage from status text, let progress bar show it
-                var cleanMessage = $"{copyProgress.Phase} - {copyProgress.RomsCopied}/{copyProgress.TotalRoms} ROMs";
-                UpdateProgress(cleanMessage, copyProgress.Percentage);
+                // Create detailed status message with file information
+                var statusMessage = copyProgress.Phase;
+                
+                // Add file-level information if available
+                if (!string.IsNullOrEmpty(copyProgress.CurrentFile) && copyProgress.CurrentFileSize > 0)
+                {
+                    var fileProgress = copyProgress.CurrentFileSize > 0 ? 
+                        (double)copyProgress.CurrentFileBytesCopied / copyProgress.CurrentFileSize * 100 : 0;
+                    var fileSizeMB = copyProgress.CurrentFileSize / (1024.0 * 1024.0);
+                    var copiedMB = copyProgress.CurrentFileBytesCopied / (1024.0 * 1024.0);
+                    
+                    statusMessage += $" - {Path.GetFileName(copyProgress.CurrentFile)} ({copiedMB:F1}/{fileSizeMB:F1} MB - {fileProgress:F0}%)";
+                }
+                
+                // Add overall progress information
+                if (copyProgress.TotalBytesToCopy > 0)
+                {
+                    var totalSizeMB = copyProgress.TotalBytesToCopy / (1024.0 * 1024.0);
+                    var copiedSizeMB = copyProgress.TotalBytesCopied / (1024.0 * 1024.0);
+                    statusMessage += $" - {copiedSizeMB:F1}/{totalSizeMB:F1} MB total";
+                }
+                
+                statusMessage += $" ({copyProgress.RomsCopied}/{copyProgress.TotalRoms} ROMs)";
+                
+                UpdateProgress(statusMessage, copyProgress.Percentage);
             });
 
             // Perform copy operation

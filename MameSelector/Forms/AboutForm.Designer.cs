@@ -33,6 +33,7 @@ namespace MameSelector.Forms
             versionLabel = new Label();
             descriptionLabel = new Label();
             featuresLabel = new Label();
+            projectLinkLabel = new LinkLabel();
             okButton = new Button();
             ((System.ComponentModel.ISupportInitialize)iconPictureBox).BeginInit();
             SuspendLayout();
@@ -86,12 +87,23 @@ namespace MameSelector.Forms
             featuresLabel.TabIndex = 4;
             featuresLabel.Text = "Features:\r\n• Scans actual ROM files first\r\n• Matches with MAME XML metadata\r\n• Optimized for large collections\r\n• Virtual list view for performance\r\n• Professional icon and clean UI";
             // 
+            // projectLinkLabel
+            // 
+            projectLinkLabel.AutoSize = true;
+            projectLinkLabel.Location = new Point(20, 240);
+            projectLinkLabel.Name = "projectLinkLabel";
+            projectLinkLabel.Size = new Size(200, 15);
+            projectLinkLabel.TabIndex = 5;
+            projectLinkLabel.TabStop = true;
+            projectLinkLabel.Text = "View project on GitHub";
+            projectLinkLabel.LinkClicked += projectLinkLabel_LinkClicked;
+            // 
             // okButton
             // 
             okButton.Location = new Point(325, 250);
             okButton.Name = "okButton";
             okButton.Size = new Size(75, 23);
-            okButton.TabIndex = 5;
+            okButton.TabIndex = 6;
             okButton.Text = "OK";
             okButton.UseVisualStyleBackColor = true;
             okButton.Click += okButton_Click;
@@ -102,6 +114,7 @@ namespace MameSelector.Forms
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(420, 290);
             Controls.Add(okButton);
+            Controls.Add(projectLinkLabel);
             Controls.Add(featuresLabel);
             Controls.Add(descriptionLabel);
             Controls.Add(versionLabel);
@@ -125,6 +138,7 @@ namespace MameSelector.Forms
         private Label versionLabel;
         private Label descriptionLabel;
         private Label featuresLabel;
+        private LinkLabel projectLinkLabel;
         private Button okButton;
     }
 }

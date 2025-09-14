@@ -32,34 +32,64 @@ namespace MameSelector.Services
             var romsList = selectedRoms.ToList();
             var totalRoms = romsList.Count;
 
-            progress?.Report(new CopyProgress { Phase = "Starting copy operation...", Percentage = 0 });
+            // Calculate total bytes to copy for accurate progress tracking
+            var totalBytesToCopy = CalculateTotalBytesToCopy(romsList);
+            var totalFilesToCopy = CalculateTotalFilesToCopy(romsList);
+            var totalBytesCopied = 0L;
+            var filesCopied = 0;
+
+            progress?.Report(new CopyProgress 
+            { 
+                Phase = "Starting copy operation...", 
+                Percentage = 0,
+                TotalRoms = totalRoms,
+                TotalFiles = totalFilesToCopy,
+                TotalBytesToCopy = totalBytesToCopy
+            });
 
             for (int i = 0; i < romsList.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var rom = romsList[i];
-                var currentProgress = (int)((double)i / totalRoms * 100);
+                
+                // Calculate bytes already copied from previous ROMs
+                var bytesCopiedBeforeThisRom = totalBytesCopied;
+                
+                // Calculate total bytes for this ROM
+                var romBytes = GetRomTotalBytes(rom);
                 
                 progress?.Report(new CopyProgress 
                 { 
-                    Phase = $"Copying {rom.Name}...", 
-                    Percentage = currentProgress,
+                    Phase = $"Starting {rom.Name}...", 
+                    Percentage = totalBytesToCopy > 0 ? (int)((double)totalBytesCopied / totalBytesToCopy * 100) : 0,
                     CurrentRom = rom.Name,
                     RomsCopied = i,
-                    TotalRoms = totalRoms
+                    TotalRoms = totalRoms,
+                    FilesCopied = filesCopied,
+                    TotalFiles = totalFilesToCopy,
+                    TotalBytesCopied = totalBytesCopied,
+                    TotalBytesToCopy = totalBytesToCopy
                 });
 
                 try
                 {
-                    await CopyRomAsync(rom, destinationPath, cancellationToken);
+                    await CopyRomAsync(rom, destinationPath, progress, totalBytesToCopy, totalBytesCopied, cancellationToken);
                     result.SuccessfulCopies++;
                     result.CopiedRoms.Add(rom.Name);
+                    
+                    // Update counters
+                    totalBytesCopied += romBytes;
+                    filesCopied += GetRomFileCount(rom);
                 }
                 catch (Exception ex)
                 {
                     result.FailedCopies++;
                     result.FailedRoms.Add(new FailedCopy { RomName = rom.Name, Error = ex.Message });
+                    
+                    // Still update counters for failed ROMs to keep progress accurate
+                    totalBytesCopied += romBytes;
+                    filesCopied += GetRomFileCount(rom);
                 }
             }
 
@@ -68,7 +98,11 @@ namespace MameSelector.Services
                 Phase = "Copy operation completed", 
                 Percentage = 100,
                 RomsCopied = totalRoms,
-                TotalRoms = totalRoms
+                TotalRoms = totalRoms,
+                FilesCopied = filesCopied,
+                TotalFiles = totalFilesToCopy,
+                TotalBytesCopied = totalBytesCopied,
+                TotalBytesToCopy = totalBytesToCopy
             });
 
             return result;
@@ -77,7 +111,11 @@ namespace MameSelector.Services
         /// <summary>
         /// Copies a single ROM and its associated CHD files
         /// </summary>
-        private async Task CopyRomAsync(ScannedRom rom, string destinationPath, CancellationToken cancellationToken)
+        private async Task CopyRomAsync(ScannedRom rom, string destinationPath, 
+            IProgress<CopyProgress>? overallProgress = null,
+            long totalBytesToCopy = 0,
+            long totalBytesCopiedSoFar = 0,
+            CancellationToken cancellationToken = default)
         {
             // Copy ROM file if it exists
             if (!string.IsNullOrEmpty(rom.RomFilePath) && File.Exists(rom.RomFilePath))
@@ -85,7 +123,29 @@ namespace MameSelector.Services
                 var romFileName = Path.GetFileName(rom.RomFilePath);
                 var romDestinationPath = Path.Combine(destinationPath, romFileName);
                 
-                await CopyFileAsync(rom.RomFilePath, romDestinationPath, cancellationToken);
+                // Create file progress reporter for this ROM file
+                var fileProgress = new Progress<(long bytesCopied, long totalBytes)>(progress =>
+                {
+                    if (overallProgress != null)
+                    {
+                        var currentBytesCopied = totalBytesCopiedSoFar + progress.bytesCopied;
+                        var overallPercentage = totalBytesToCopy > 0 ? (int)((double)currentBytesCopied / totalBytesToCopy * 100) : 0;
+                        
+                        overallProgress.Report(new CopyProgress
+                        {
+                            Phase = $"Copying {rom.Name}...",
+                            Percentage = overallPercentage,
+                            CurrentRom = rom.Name,
+                            CurrentFile = romFileName,
+                            CurrentFileBytesCopied = progress.bytesCopied,
+                            CurrentFileSize = progress.totalBytes,
+                            TotalBytesCopied = currentBytesCopied,
+                            TotalBytesToCopy = totalBytesToCopy
+                        });
+                    }
+                });
+                
+                await CopyFileAsync(rom.RomFilePath, romDestinationPath, fileProgress, cancellationToken);
             }
 
             // Copy CHD files if they exist - they go in a subfolder named after the ROM
@@ -109,16 +169,40 @@ namespace MameSelector.Services
                         var chdFileName = Path.GetFileName(chdFile);
                         var chdDestinationPath = Path.Combine(chdFolderPath, chdFileName);
                         
-                        await CopyFileAsync(chdFile, chdDestinationPath, cancellationToken);
+                        // Create file progress reporter for this CHD file
+                        var chdFileProgress = new Progress<(long bytesCopied, long totalBytes)>(progress =>
+                        {
+                            if (overallProgress != null)
+                            {
+                                var currentBytesCopied = totalBytesCopiedSoFar + progress.bytesCopied;
+                                var overallPercentage = totalBytesToCopy > 0 ? (int)((double)currentBytesCopied / totalBytesToCopy * 100) : 0;
+                                
+                                overallProgress.Report(new CopyProgress
+                                {
+                                    Phase = $"Copying {rom.Name} CHD...",
+                                    Percentage = overallPercentage,
+                                    CurrentRom = rom.Name,
+                                    CurrentFile = chdFileName,
+                                    CurrentFileBytesCopied = progress.bytesCopied,
+                                    CurrentFileSize = progress.totalBytes,
+                                    TotalBytesCopied = currentBytesCopied,
+                                    TotalBytesToCopy = totalBytesToCopy
+                                });
+                            }
+                        });
+                        
+                        await CopyFileAsync(chdFile, chdDestinationPath, chdFileProgress, cancellationToken);
                     }
                 }
             }
         }
 
         /// <summary>
-        /// Copies a single file with proper error handling
+        /// Copies a single file with proper error handling and progress reporting
         /// </summary>
-        private async Task CopyFileAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken)
+        private async Task CopyFileAsync(string sourcePath, string destinationPath, 
+            IProgress<(long bytesCopied, long totalBytes)>? fileProgress = null,
+            CancellationToken cancellationToken = default)
         {
             // Create destination directory if it doesn't exist
             var destinationDir = Path.GetDirectoryName(destinationPath);
@@ -127,14 +211,30 @@ namespace MameSelector.Services
                 Directory.CreateDirectory(destinationDir);
             }
 
-            // Copy the file
+            var sourceFileInfo = new FileInfo(sourcePath);
+            var totalBytes = sourceFileInfo.Length;
+            var bytesCopied = 0L;
+
+            // Copy the file with progress reporting
             using var sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             using var destinationStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None);
             
-            await sourceStream.CopyToAsync(destinationStream, cancellationToken);
+            var buffer = new byte[64 * 1024]; // 64KB buffer for better performance
+            int bytesRead;
+            
+            while ((bytesRead = await sourceStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
+            {
+                await destinationStream.WriteAsync(buffer, 0, bytesRead, cancellationToken);
+                bytesCopied += bytesRead;
+                
+                // Report progress every 64KB or at completion
+                if (fileProgress != null && (bytesCopied % (64 * 1024) == 0 || bytesCopied == totalBytes))
+                {
+                    fileProgress.Report((bytesCopied, totalBytes));
+                }
+            }
             
             // Preserve file attributes
-            var sourceFileInfo = new FileInfo(sourcePath);
             var destinationFileInfo = new FileInfo(destinationPath);
             destinationFileInfo.CreationTime = sourceFileInfo.CreationTime;
             destinationFileInfo.LastWriteTime = sourceFileInfo.LastWriteTime;
@@ -194,6 +294,88 @@ namespace MameSelector.Services
             result.IsValid = result.Errors.Count == 0;
             return result;
         }
+
+        /// <summary>
+        /// Calculates the total number of bytes to copy for all ROMs
+        /// </summary>
+        private long CalculateTotalBytesToCopy(List<ScannedRom> roms)
+        {
+            long totalBytes = 0;
+            foreach (var rom in roms)
+            {
+                totalBytes += GetRomTotalBytes(rom);
+            }
+            return totalBytes;
+        }
+
+        /// <summary>
+        /// Calculates the total number of files to copy for all ROMs
+        /// </summary>
+        private int CalculateTotalFilesToCopy(List<ScannedRom> roms)
+        {
+            int totalFiles = 0;
+            foreach (var rom in roms)
+            {
+                totalFiles += GetRomFileCount(rom);
+            }
+            return totalFiles;
+        }
+
+        /// <summary>
+        /// Gets the total number of bytes for a ROM (including CHD files)
+        /// </summary>
+        private long GetRomTotalBytes(ScannedRom rom)
+        {
+            long totalBytes = 0;
+            
+            // Add ROM file size
+            if (!string.IsNullOrEmpty(rom.RomFilePath) && File.Exists(rom.RomFilePath))
+            {
+                totalBytes += new FileInfo(rom.RomFilePath).Length;
+            }
+            
+            // Add CHD file sizes
+            if (rom.ChdFiles?.Any() == true)
+            {
+                foreach (var chdFile in rom.ChdFiles)
+                {
+                    if (File.Exists(chdFile))
+                    {
+                        totalBytes += new FileInfo(chdFile).Length;
+                    }
+                }
+            }
+            
+            return totalBytes;
+        }
+
+        /// <summary>
+        /// Gets the total number of files for a ROM (including CHD files)
+        /// </summary>
+        private int GetRomFileCount(ScannedRom rom)
+        {
+            int fileCount = 0;
+            
+            // Count ROM file
+            if (!string.IsNullOrEmpty(rom.RomFilePath) && File.Exists(rom.RomFilePath))
+            {
+                fileCount++;
+            }
+            
+            // Count CHD files
+            if (rom.ChdFiles?.Any() == true)
+            {
+                foreach (var chdFile in rom.ChdFiles)
+                {
+                    if (File.Exists(chdFile))
+                    {
+                        fileCount++;
+                    }
+                }
+            }
+            
+            return fileCount;
+        }
     }
 
     /// <summary>
@@ -227,6 +409,13 @@ namespace MameSelector.Services
         public string CurrentRom { get; set; } = string.Empty;
         public int RomsCopied { get; set; }
         public int TotalRoms { get; set; }
+        public string CurrentFile { get; set; } = string.Empty;
+        public long CurrentFileBytesCopied { get; set; }
+        public long CurrentFileSize { get; set; }
+        public long TotalBytesCopied { get; set; }
+        public long TotalBytesToCopy { get; set; }
+        public int FilesCopied { get; set; }
+        public int TotalFiles { get; set; }
     }
 
     /// <summary>
