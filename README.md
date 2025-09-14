@@ -136,7 +136,7 @@ The right panel shows ROMs already copied to destination with:
 - Delete functionality
 - Refresh capability
 
-## Recent Improvements (v0.4.4)
+## Recent Improvements (v0.4.5)
 
 - **ROM Scanning Improvements**: Fixed source ROM scanning, improved performance with background processing
 - **Verification System**: Complete CRC32 verification for ROM files with ZIP support and individual file checking
@@ -167,7 +167,7 @@ This project follows semantic versioning (SemVer) with the format `MAJOR.MINOR.P
 - **MINOR**: New features, backwards compatible
 - **PATCH**: Bug fixes and minor improvements
 
-### Current Version: v0.4.4
+### Current Version: v0.4.5
 
 **Version History:**
 - **v0.4.4**: Added GitHub project link to About window for easy access to repository
@@ -228,3 +228,4 @@ This is a personal project, but suggestions and improvements are welcome!
 ## License
 
 This project is for personal use. Please respect MAME licensing and ROM distribution policies.
+

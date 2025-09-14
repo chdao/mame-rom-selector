@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g., v0.4.3)'
+        description: 'Release version (e.g., v0.4.5)'
         required: true
-        default: 'v0.4.3'
+        default: 'v0.4.5'
       release_notes:
         description: 'Release notes'
         required: false
@@ -111,3 +111,4 @@ jobs:
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
