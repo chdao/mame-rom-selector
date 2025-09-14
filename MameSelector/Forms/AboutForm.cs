@@ -94,7 +94,7 @@ namespace MameSelector.Forms
             {
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
-                    FileName = "https://github.com/cdaoust/MAME-Selector",
+                    FileName = "https://github.com/chdao/mame-rom-selector",
                     UseShellExecute = true
                 });
             }
