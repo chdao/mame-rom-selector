@@ -83,14 +83,14 @@ namespace MameSelector.Forms
             featuresLabel.Location = new Point(20, 150);
             featuresLabel.MaximumSize = new Size(400, 0);
             featuresLabel.Name = "featuresLabel";
-            featuresLabel.Size = new Size(380, 75);
+            featuresLabel.Size = new Size(380, 90);
             featuresLabel.TabIndex = 4;
-            featuresLabel.Text = "Features:\r\n• Scans actual ROM files first\r\n• Matches with MAME XML metadata\r\n• Optimized for large collections\r\n• Virtual list view for performance\r\n• Professional icon and clean UI";
+            featuresLabel.Text = "Features:\r\n• Scans actual ROM files first\r\n• Matches with MAME XML metadata\r\n• Optimized for large collections\r\n• Virtual list view for performance\r\n• Professional icon and clean UI\r\n• Direct GitHub project access";
             // 
             // projectLinkLabel
             // 
             projectLinkLabel.AutoSize = true;
-            projectLinkLabel.Location = new Point(20, 240);
+            projectLinkLabel.Location = new Point(20, 255);
             projectLinkLabel.Name = "projectLinkLabel";
             projectLinkLabel.Size = new Size(200, 15);
             projectLinkLabel.TabIndex = 5;
@@ -100,7 +100,7 @@ namespace MameSelector.Forms
             // 
             // okButton
             // 
-            okButton.Location = new Point(325, 250);
+            okButton.Location = new Point(325, 265);
             okButton.Name = "okButton";
             okButton.Size = new Size(75, 23);
             okButton.TabIndex = 6;
@@ -112,7 +112,7 @@ namespace MameSelector.Forms
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(420, 290);
+            ClientSize = new Size(420, 305);
             Controls.Add(okButton);
             Controls.Add(projectLinkLabel);
             Controls.Add(featuresLabel);
