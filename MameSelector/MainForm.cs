@@ -166,7 +166,7 @@ public partial class MainForm : Form
         var xmlParser = new MameXmlParser();
         var metadataService = new RomMetadataService(xmlParser);
         var cacheService = new RomCacheService();
-        var copyService = new RomCopyService();
+        var copyService = new RomCopyService(_loggingService);
         
         // Initialize controller
         _controller = new MainController(settingsManager, romScanner, metadataService, cacheService, xmlParser, copyService, _romListView, _loggingService);
@@ -940,7 +940,6 @@ public partial class MainForm : Form
                     statusMessage += $" - {copiedSizeMB:F1}/{totalSizeMB:F1} MB total";
                 }
                 
-                statusMessage += $" ({copyProgress.RomsCopied}/{copyProgress.TotalRoms} ROMs)";
                 
                 UpdateProgress(statusMessage, copyProgress.Percentage);
             });

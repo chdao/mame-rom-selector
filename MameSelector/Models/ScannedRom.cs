@@ -18,6 +18,16 @@ public class ScannedRom
     public bool InDestination { get; set; }
     
     /// <summary>
+    /// Size of the ROM file in the destination directory (0 if not in destination)
+    /// </summary>
+    public long DestinationFileSize { get; set; }
+    
+    /// <summary>
+    /// Whether the destination file size differs from the source file size
+    /// </summary>
+    public bool HasSizeMismatch => InDestination && DestinationFileSize != TotalSize;
+    
+    /// <summary>
     /// Whether this ROM is currently selected in the UI
     /// </summary>
     public bool IsSelected { get; set; }

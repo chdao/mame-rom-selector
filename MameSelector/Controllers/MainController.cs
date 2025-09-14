@@ -705,30 +705,37 @@ public class MainController
             UpdateStatus($"Warning: {validation.Warnings.Count} files not found");
         }
 
-        // Perform the copy operation
+        // Perform the copy operation with callback to refresh destination list
         var result = await _copyService.CopyRomsAsync(
             selectedRoms, 
             _settings.DestinationPath, 
-            progress, 
-            cancellationToken);
-
-        // Update destination status for copied ROMs and deselect them
-        foreach (var romName in result.CopiedRoms)
-        {
-            if (_scannedRoms.TryGetValue(romName, out var rom))
+            progress,
+            async romName => 
             {
-                rom.InDestination = true;
-                // Deselect the ROM since it's now copied
-                rom.IsSelected = false;
-            }
-        }
+                // Update the ROM as being in destination
+                if (_scannedRoms.TryGetValue(romName, out var rom))
+                {
+                    rom.IsSelected = false; // Deselect since it's now copied
+                }
+                
+                // Re-scan destination directory to get actual file sizes and update the ROM status
+                if (!string.IsNullOrEmpty(_settings.DestinationPath))
+                {
+                    await _romScanner.ScanDestinationAsync(
+                        _settings.DestinationPath,
+                        _scannedRoms,
+                        null, // No progress reporting for individual ROM updates
+                        cancellationToken);
+                    
+                    // Refresh the destination list with updated information
+                    _destinationRomListView?.UpdateDestinationRoms(_scannedRoms.Values.ToList());
+                }
+            },
+            cancellationToken);
 
         // Refresh the ROM list view to update selections
         _romListView.RefreshSelection();
-        
-        // Refresh both list views
         _romListView.RefreshDisplay();
-        _destinationRomListView?.UpdateDestinationRoms(_scannedRoms.Values.ToList());
 
         // Update status
         UpdateStatus($"Copied {result.SuccessfulCopies} ROMs successfully" + 

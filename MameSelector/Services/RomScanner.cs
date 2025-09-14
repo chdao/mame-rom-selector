@@ -408,7 +408,7 @@ public class RomScanner
 
         _loggingService?.LogDebug($"Starting destination scan of: {destinationPath}");
 
-        var destinationRoms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var destinationRoms = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         var allExtensions = _validRomExtensions.Concat(_validChdExtensions).ToHashSet();
 
         try
@@ -429,8 +429,9 @@ public class RomScanner
 
                 if (_validRomExtensions.Contains(extension))
                 {
-                    // ROM file - add the ROM name
-                    destinationRoms.Add(fileName);
+                    // ROM file - add the ROM name with file size
+                    var fileInfo = new FileInfo(file);
+                    destinationRoms[fileName] = fileInfo.Length;
                 }
                 else if (_validChdExtensions.Contains(extension))
                 {
@@ -439,34 +440,56 @@ public class RomScanner
                     if (!string.IsNullOrEmpty(directoryName))
                     {
                         var folderName = Path.GetFileName(directoryName);
+                        var fileInfo = new FileInfo(file);
+                        
                         // If CHD is in a subfolder, use the folder name as the ROM name
                         if (directoryName != destinationPath)
                         {
-                            destinationRoms.Add(folderName);
+                            // Add to existing size if ROM already exists, otherwise set new size
+                            if (destinationRoms.ContainsKey(folderName))
+                            {
+                                destinationRoms[folderName] += fileInfo.Length;
+                            }
+                            else
+                            {
+                                destinationRoms[folderName] = fileInfo.Length;
+                            }
                         }
                         else
                         {
                             // CHD is in root directory, use filename
-                            destinationRoms.Add(fileName);
+                            if (destinationRoms.ContainsKey(fileName))
+                            {
+                                destinationRoms[fileName] += fileInfo.Length;
+                            }
+                            else
+                            {
+                                destinationRoms[fileName] = fileInfo.Length;
+                            }
                         }
                     }
                 }
             }
 
-            // First, clear all InDestination flags (ROMs may have been removed)
+            // First, clear all InDestination flags and destination sizes (ROMs may have been removed)
             foreach (var rom in roms.Values)
             {
                 rom.InDestination = false;
+                rom.DestinationFileSize = 0;
             }
 
-            // Then mark ROMs as being in destination
+            // Then mark ROMs as being in destination and set their destination file sizes
             int markedCount = 0;
             var unmatchedRoms = new List<string>();
-            foreach (var romName in destinationRoms)
+            foreach (var kvp in destinationRoms)
             {
+                var romName = kvp.Key;
+                var destinationSize = kvp.Value;
+                
                 if (roms.TryGetValue(romName, out var rom))
                 {
                     rom.InDestination = true;
+                    rom.DestinationFileSize = destinationSize;
                     markedCount++;
                     var debugMsg = $"DEBUG: ROM '{romName}' found in collection, size: {rom.TotalSize} bytes";
                     _loggingService?.LogDebug(debugMsg.Replace("DEBUG: ", ""));

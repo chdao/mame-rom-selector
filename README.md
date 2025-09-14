@@ -167,9 +167,11 @@ This project follows semantic versioning (SemVer) with the format `MAJOR.MINOR.P
 - **MINOR**: New features, backwards compatible
 - **PATCH**: Bug fixes and minor improvements
 
-### Current Version: v0.4.5
+### Current Version: v0.4.6
 
 **Version History:**
+- **v0.4.6**: Added copy operation logging, improved destination list real-time refresh, fixed progress bar display, removed confusing status counters
+- **v0.4.5**: Fixed GitHub project link in About window, improved progress bar appearance
 - **v0.4.4**: Added GitHub project link to About window for easy access to repository
 - **v0.4.3**: Reduced log verbosity, eliminated debug message spam, improved progress reporting
 - **v0.4.2**: Major improvements to ROM scanning, verification system, console interface, and version management

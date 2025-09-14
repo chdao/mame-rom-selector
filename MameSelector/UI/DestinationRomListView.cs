@@ -157,7 +157,7 @@ namespace MameSelector.UI
             var item = new ListViewItem(rom.Name);
             
             item.SubItems.Add(rom.DisplayName);
-            item.SubItems.Add(FormatFileSize(rom.TotalSize));
+            item.SubItems.Add(FormatFileSize(rom.DestinationFileSize));
 
             item.Tag = rom;
 
@@ -165,6 +165,10 @@ namespace MameSelector.UI
             if (rom.IsUnmatched)
             {
                 item.ForeColor = Color.Red;
+            }
+            else if (rom.HasSizeMismatch)
+            {
+                item.ForeColor = Color.Red; // Size mismatch - potential corruption or incomplete copy
             }
             else if (!rom.HasMetadata)
             {
@@ -242,12 +246,16 @@ namespace MameSelector.UI
                 if (rom1.IsUnmatched && !rom2.IsUnmatched) return -1;
                 if (!rom1.IsUnmatched && rom2.IsUnmatched) return 1;
                 
+                // Prioritize size mismatches second (after unmatched ROMs)
+                if (rom1.HasSizeMismatch && !rom2.HasSizeMismatch && !rom2.IsUnmatched) return -1;
+                if (!rom1.HasSizeMismatch && rom2.HasSizeMismatch && !rom1.IsUnmatched) return 1;
+                
                 // If both are unmatched or both are matched, sort by the selected column
                 var comparison = _sortColumn switch
                 {
                     0 => string.Compare(rom1.Name, rom2.Name, StringComparison.OrdinalIgnoreCase),
                     1 => string.Compare(rom1.DisplayName, rom2.DisplayName, StringComparison.OrdinalIgnoreCase),
-                    2 => rom1.TotalSize.CompareTo(rom2.TotalSize),
+                    2 => rom1.DestinationFileSize.CompareTo(rom2.DestinationFileSize),
                     _ => 0
                 };
 
