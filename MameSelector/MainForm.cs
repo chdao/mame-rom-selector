@@ -808,11 +808,6 @@ public partial class MainForm : Form
         if (percentage >= 0)
         {
             progressBar.Value = Math.Min(Math.Max(percentage, 0), 100);
-            progressBar.SetText($"{percentage}%");
-        }
-        else
-        {
-            progressBar.SetText("");
         }
     }
 
@@ -829,7 +824,6 @@ public partial class MainForm : Form
 
         statusLabel.Text = "Ready";
         progressBar.Value = 0;
-        progressBar.SetText("");
     }
 
     /// <summary>
@@ -845,7 +839,6 @@ public partial class MainForm : Form
 
         statusLabel.Text = message;
         progressBar.Value = 0;
-        progressBar.SetText("");
         progressBar.Visible = true;
     }
 
@@ -862,7 +855,6 @@ public partial class MainForm : Form
 
         statusLabel.Text = "Done";
         progressBar.Value = 100;
-        progressBar.SetText("100%");
         
         // Clear progress bar and reset after a short delay
         Task.Delay(1500).ContinueWith(_ => 
@@ -872,14 +864,12 @@ public partial class MainForm : Form
                 Invoke(new Action(() => 
                 {
                     progressBar.Value = 0;
-                    progressBar.SetText("");
                     statusLabel.Text = message;
                 }));
             }
             else
             {
                 progressBar.Value = 0;
-                progressBar.SetText("");
                 statusLabel.Text = message;
             }
         });

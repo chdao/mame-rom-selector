@@ -66,7 +66,7 @@ partial class MainForm
         chdCountLabel = new ToolStripStatusLabel();
         installedCountLabel = new ToolStripStatusLabel();
         selectedCountLabel = new ToolStripStatusLabel();
-        progressBar = new MameSelector.UI.CustomProgressBar();
+        progressBar = new ProgressBar();
         mainPanel = new Panel();
         mainSplitContainer = new SplitContainer();
         romsSplitContainer = new SplitContainer();
@@ -279,8 +279,8 @@ partial class MainForm
         // progressBar
         // 
         progressBar.Name = "progressBar";
-        progressBar.Size = new Size(150, 6);
-        progressBar.Height = 10;
+        progressBar.Size = new Size(150, 16);
+        progressBar.Height = 16;
         progressBar.AutoSize = false;
         progressBar.Margin = new Padding(0, 2, 0, 2);
         progressBar.Visible = true;
@@ -661,7 +661,7 @@ partial class MainForm
     private ToolStripStatusLabel chdCountLabel;
     private ToolStripStatusLabel installedCountLabel;
     private ToolStripStatusLabel selectedCountLabel;
-    private MameSelector.UI.CustomProgressBar progressBar;
+    private ProgressBar progressBar;
     private Panel mainPanel;
     private SplitContainer mainSplitContainer;
     private SplitContainer romsSplitContainer;
