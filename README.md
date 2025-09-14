@@ -136,7 +136,7 @@ The right panel shows ROMs already copied to destination with:
 - Delete functionality
 - Refresh capability
 
-## Recent Improvements (v0.4.3)
+## Recent Improvements (v0.4.4)
 
 - **ROM Scanning Improvements**: Fixed source ROM scanning, improved performance with background processing
 - **Verification System**: Complete CRC32 verification for ROM files with ZIP support and individual file checking
@@ -167,9 +167,10 @@ This project follows semantic versioning (SemVer) with the format `MAJOR.MINOR.P
 - **MINOR**: New features, backwards compatible
 - **PATCH**: Bug fixes and minor improvements
 
-### Current Version: v0.4.3
+### Current Version: v0.4.4
 
 **Version History:**
+- **v0.4.4**: Added GitHub project link to About window for easy access to repository
 - **v0.4.3**: Reduced log verbosity, eliminated debug message spam, improved progress reporting
 - **v0.4.2**: Major improvements to ROM scanning, verification system, console interface, and version management
 - **v0.3.3**: Self-contained application with embedded icon, startup crash fixes
