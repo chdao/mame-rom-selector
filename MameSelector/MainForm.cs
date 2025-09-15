@@ -887,6 +887,7 @@ public partial class MainForm : Form
     private async Task CopyRomsAsync()
     {
         _isCopying = true;
+        copyRomsButton.Enabled = false;
         try
         {
             var selectedRoms = _controller.SelectedRoms.ToList();
@@ -949,28 +950,29 @@ public partial class MainForm : Form
 
             CompleteProgress("Copy operation completed");
 
-            // Show result
-            var message = $"Copy operation completed!\n\n" +
-                         $"Successfully copied: {result.SuccessfulCopies} ROMs\n" +
-                         $"Failed: {result.FailedCopies} ROMs";
-
+            // Log result to console
             if (result.FailedCopies > 0)
             {
-                message += $"\n\nFailed ROMs:\n" + string.Join("\n", result.FailedRoms.Select(f => $"- {f.RomName}: {f.Error}"));
+                _loggingService.LogError($"Copy operation completed with errors: {result.SuccessfulCopies} successful, {result.FailedCopies} failed");
+                foreach (var failedRom in result.FailedRoms)
+                {
+                    _loggingService.LogError($"  Failed: {failedRom.RomName} - {failedRom.Error}");
+                }
             }
-
-            MessageBox.Show(message, "Copy Complete", MessageBoxButtons.OK, 
-                result.FailedCopies > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            else
+            {
+                _loggingService.LogInfo($"Copy operation completed successfully: {result.SuccessfulCopies} ROMs copied");
+            }
         }
         catch (Exception ex)
         {
             UpdateProgress("Copy operation failed");
-            MessageBox.Show($"Error copying ROMs: {ex.Message}", "Copy Error", 
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _loggingService.LogError($"Copy operation failed: {ex.Message}");
         }
         finally
         {
             _isCopying = false;
+            copyRomsButton.Enabled = _controller.SelectedRoms.Any() && !string.IsNullOrEmpty(_controller.Settings.DestinationPath) && !_controller.IsLoading;
         }
     }
 

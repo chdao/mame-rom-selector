@@ -7,6 +7,16 @@
 
 This tool helps you scan, verify, and copy ROMs from your source directory to a destination directory, with support for CHD files and comprehensive metadata matching.
 
+## ⚠️ IMPORTANT: Non-Merged ROMsets Only
+
+**This software ONLY works with NON-MERGED ROMsets. It does NOT support merged ROMsets.**
+
+- ✅ **NON-MERGED**: Each ROM file contains all required files for that game
+- ❌ **MERGED**: ROM files depend on parent ROMs (not supported)
+- ❌ **SPLIT**: ROM files split across parent/child relationships (not supported)
+
+If you have a merged ROMset, you must convert it to non-merged format before using this tool. This is a fundamental limitation of the application's design.
+
 ## Screenshot
 
 <div align="center">
@@ -16,6 +26,7 @@ This tool helps you scan, verify, and copy ROMs from your source directory to a 
 
 ## Features
 
+- **NON-MERGED ROMsets Only**: Designed exclusively for non-merged ROM collections
 - **ROM Scanning**: Scan directories for ROM files and match them with MAME XML metadata
 - **Metadata Matching**: Automatically match scanned ROMs with MAME XML game information
 - **ROM Verification**: Verify ROM integrity using CRC checks against MAME XML data
@@ -60,6 +71,7 @@ This project demonstrates how AI coding assistants can accelerate development wh
 
 - .NET 8.0 or later
 - Windows 10/11
+- **NON-MERGED ROMset** (this software does NOT support merged ROMsets)
 - MAME XML file (typically `mame.xml` or similar)
 
 ### Getting MAME Datfiles
