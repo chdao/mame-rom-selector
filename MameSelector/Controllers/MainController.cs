@@ -17,6 +17,9 @@ public class MainController
     private readonly RomCopyService _copyService;
     private readonly VirtualRomListView _romListView;
     private readonly LoggingService _loggingService;
+    private readonly RomsetDetector _romsetDetector;
+    private readonly ParentRomResolver _parentResolver;
+    private readonly MergedRomValidator _mergedValidator;
     private DestinationRomListView? _destinationRomListView;
     private MainForm? _mainForm;
 
@@ -38,7 +41,10 @@ public class MainController
         MameXmlParser xmlParser,
         RomCopyService copyService,
         VirtualRomListView romListView,
-        LoggingService loggingService)
+        LoggingService loggingService,
+        RomsetDetector romsetDetector,
+        ParentRomResolver parentResolver,
+        MergedRomValidator mergedValidator)
     {
         _settingsManager = settingsManager;
         _romScanner = romScanner;
@@ -48,6 +54,9 @@ public class MainController
         _copyService = copyService;
         _romListView = romListView;
         _loggingService = loggingService;
+        _romsetDetector = romsetDetector;
+        _parentResolver = parentResolver;
+        _mergedValidator = mergedValidator;
         _settings = new AppSettings();
 
         // Wire up events
@@ -454,15 +463,52 @@ public class MainController
                 _romListView.AddRomSilent(rom);
             });
 
-            _scannedRoms = await Task.Run(() => _romScanner.ScanRomsAsync(
-                _settings.RomRepositoryPath,
-                _settings.CHDRepositoryPath,
-                scanProgress,
-                romFoundCallback, // Use silent callback like cache loading
-                metadataLookup,
-                cancellationToken), cancellationToken);
+            // Step 2.5: Detect ROMset type if auto-detection is enabled
+            RomsetType detectedRomsetType = _settings.RomsetType;
+            if (_settings.AutoDetectRomsetType)
+            {
+                progress?.Report("Detecting ROMset type...");
+                _loggingService.LogInfo("Auto-detecting ROMset type...");
+                detectedRomsetType = await _romsetDetector.DetectRomsetTypeAsync(
+                    _settings.RomRepositoryPath,
+                    metadataLookup,
+                    cancellationToken);
+                
+                // Update settings with detected type
+                _settings.RomsetType = detectedRomsetType;
+                await _settingsManager.SaveSettingsAsync(_settings);
+                _loggingService.LogInfo($"ROMset type detected and saved: {detectedRomsetType}");
+            }
+
+            // Step 3: Scan ROMs with merged ROMset support if needed
+            if (detectedRomsetType == RomsetType.Merged)
+            {
+                progress?.Report("Building parent-child dependency tree...");
+                _loggingService.LogInfo("Building parent-child dependency tree...");
+                _parentResolver.BuildDependencyTree(metadataLookup);
+                
+                _scannedRoms = await Task.Run(() => _romScanner.ScanMergedRomsAsync(
+                    _settings.RomRepositoryPath,
+                    _settings.CHDRepositoryPath,
+                    detectedRomsetType,
+                    _parentResolver,
+                    scanProgress,
+                    romFoundCallback,
+                    metadataLookup,
+                    cancellationToken), cancellationToken);
+            }
+            else
+            {
+                _scannedRoms = await Task.Run(() => _romScanner.ScanRomsAsync(
+                    _settings.RomRepositoryPath,
+                    _settings.CHDRepositoryPath,
+                    scanProgress,
+                    romFoundCallback,
+                    metadataLookup,
+                    cancellationToken), cancellationToken);
+            }
             
-            _loggingService.LogInfo($"ROM repository scan completed. Found {_scannedRoms.Count:N0} ROMs");
+            _loggingService.LogInfo($"ROM repository scan completed. Found {_scannedRoms.Count:N0} ROMs (Type: {detectedRomsetType})");
             
             // Clear scanning state and trigger final UI update
             _romListView.SetScanningState(false);
@@ -705,33 +751,69 @@ public class MainController
             UpdateStatus($"Warning: {validation.Warnings.Count} files not found");
         }
 
-        // Perform the copy operation with callback to refresh destination list
-        var result = await _copyService.CopyRomsAsync(
-            selectedRoms, 
-            _settings.DestinationPath, 
-            progress,
-            async romName => 
-            {
-                // Update the ROM as being in destination
-                if (_scannedRoms.TryGetValue(romName, out var rom))
+        // Perform the copy operation with merged ROMset support
+        CopyResult result;
+        if (_settings.RomsetType == RomsetType.Merged)
+        {
+            result = await _copyService.CopyMergedRomsAsync(
+                selectedRoms,
+                _settings.DestinationPath,
+                _settings.RomsetType,
+                _settings.AutoCopyDependencies,
+                _parentResolver,
+                progress,
+                async romName => 
                 {
-                    rom.IsSelected = false; // Deselect since it's now copied
-                }
-                
-                // Re-scan destination directory to get actual file sizes and update the ROM status
-                if (!string.IsNullOrEmpty(_settings.DestinationPath))
-                {
-                    await _romScanner.ScanDestinationAsync(
-                        _settings.DestinationPath,
-                        _scannedRoms,
-                        null, // No progress reporting for individual ROM updates
-                        cancellationToken);
+                    // Update the ROM as being in destination
+                    if (_scannedRoms.TryGetValue(romName, out var rom))
+                    {
+                        rom.IsSelected = false; // Deselect since it's now copied
+                    }
                     
-                    // Refresh the destination list with updated information
-                    _destinationRomListView?.UpdateDestinationRoms(_scannedRoms.Values.ToList());
-                }
-            },
-            cancellationToken);
+                    // Re-scan destination directory to get actual file sizes and update the ROM status
+                    if (!string.IsNullOrEmpty(_settings.DestinationPath))
+                    {
+                        await _romScanner.ScanDestinationAsync(
+                            _settings.DestinationPath,
+                            _scannedRoms,
+                            null, // No progress reporting for individual ROM updates
+                            cancellationToken);
+                        
+                        // Refresh the destination list with updated information
+                        _destinationRomListView?.UpdateDestinationRoms(_scannedRoms.Values.ToList());
+                    }
+                },
+                cancellationToken);
+        }
+        else
+        {
+            result = await _copyService.CopyRomsAsync(
+                selectedRoms, 
+                _settings.DestinationPath, 
+                progress,
+                async romName => 
+                {
+                    // Update the ROM as being in destination
+                    if (_scannedRoms.TryGetValue(romName, out var rom))
+                    {
+                        rom.IsSelected = false; // Deselect since it's now copied
+                    }
+                    
+                    // Re-scan destination directory to get actual file sizes and update the ROM status
+                    if (!string.IsNullOrEmpty(_settings.DestinationPath))
+                    {
+                        await _romScanner.ScanDestinationAsync(
+                            _settings.DestinationPath,
+                            _scannedRoms,
+                            null, // No progress reporting for individual ROM updates
+                            cancellationToken);
+                        
+                        // Refresh the destination list with updated information
+                        _destinationRomListView?.UpdateDestinationRoms(_scannedRoms.Values.ToList());
+                    }
+                },
+                cancellationToken);
+        }
 
         // Refresh the ROM list view to update selections
         _romListView.RefreshSelection();

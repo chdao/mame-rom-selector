@@ -91,4 +91,52 @@ public class ScannedRom
     /// Whether this ROM is a device file (has metadata and is device)
     /// </summary>
     public bool IsDevice => Metadata?.IsDevice ?? false;
+    
+    // Merged ROMset support
+    /// <summary>
+    /// Whether this ROM is part of a merged ROMset
+    /// </summary>
+    public bool IsMergedRomset { get; set; } = false;
+    
+    /// <summary>
+    /// List of parent ROM files that are missing/required for this clone
+    /// </summary>
+    public List<string> MissingParentFiles { get; set; } = new();
+    
+    /// <summary>
+    /// List of parent ROM files that are available for this clone
+    /// </summary>
+    public List<string> AvailableParentFiles { get; set; } = new();
+    
+    /// <summary>
+    /// Whether this clone has all required parent files available
+    /// </summary>
+    public bool HasAllRequiredFiles => MissingParentFiles.Count == 0;
+    
+    /// <summary>
+    /// Whether this ROM is a parent game (has clones that depend on it)
+    /// </summary>
+    public bool IsParentGame => Metadata?.IsParentGame ?? false;
+    
+    /// <summary>
+    /// List of clone ROMs that depend on this parent
+    /// </summary>
+    public List<string> DependentClones { get; set; } = new();
+    
+    /// <summary>
+    /// Validation status for merged ROM integrity
+    /// </summary>
+    public MergedRomValidationStatus ValidationStatus { get; set; } = MergedRomValidationStatus.NotValidated;
+}
+
+/// <summary>
+/// Validation status for merged ROM integrity
+/// </summary>
+public enum MergedRomValidationStatus
+{
+    NotValidated,       // Not yet validated
+    Valid,              // All required files present and valid
+    MissingParentFiles, // Some parent files are missing
+    InvalidChecksums,   // CRC/SHA1 checksums don't match
+    IncompleteGame      // Game cannot run due to missing dependencies
 }

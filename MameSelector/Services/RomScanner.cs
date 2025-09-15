@@ -24,6 +24,113 @@ public class RomScanner
     }
 
     /// <summary>
+    /// Scans ROMs with merged ROMset support, including parent-child dependency analysis
+    /// </summary>
+    /// <param name="romRepositoryPath">Path to ROM repository</param>
+    /// <param name="chdRepositoryPath">Optional path to CHD repository</param>
+    /// <param name="romsetType">Type of ROMset being scanned</param>
+    /// <param name="parentResolver">Parent-child dependency resolver</param>
+    /// <param name="progress">Progress reporter</param>
+    /// <param name="romFoundCallback">Callback for each ROM found</param>
+    /// <param name="metadataLookup">Optional metadata lookup dictionary</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Dictionary of ROM name to ScannedRom with merged ROMset information</returns>
+    public async Task<Dictionary<string, ScannedRom>> ScanMergedRomsAsync(
+        string romRepositoryPath,
+        string? chdRepositoryPath = null,
+        RomsetType romsetType = RomsetType.NonMerged,
+        ParentRomResolver? parentResolver = null,
+        IProgress<ScanProgress>? progress = null,
+        Action<ScannedRom>? romFoundCallback = null,
+        Dictionary<string, MameGame>? metadataLookup = null,
+        CancellationToken cancellationToken = default)
+    {
+        _loggingService?.LogInfo($"Scanning ROMs with merged ROMset support (Type: {romsetType})");
+
+        // First, do the standard ROM scan
+        var scannedRoms = await ScanRomsAsync(
+            romRepositoryPath,
+            chdRepositoryPath,
+            progress,
+            romFoundCallback,
+            metadataLookup,
+            cancellationToken);
+
+        // If this is a merged ROMset, analyze dependencies
+        if (romsetType == RomsetType.Merged && parentResolver != null && metadataLookup != null)
+        {
+            await AnalyzeMergedDependenciesAsync(scannedRoms, metadataLookup, parentResolver, cancellationToken);
+        }
+
+        return scannedRoms;
+    }
+
+    /// <summary>
+    /// Analyzes merged ROM dependencies and updates ScannedRom objects
+    /// </summary>
+    private async Task AnalyzeMergedDependenciesAsync(
+        Dictionary<string, ScannedRom> scannedRoms,
+        Dictionary<string, MameGame> metadataLookup,
+        ParentRomResolver parentResolver,
+        CancellationToken cancellationToken)
+    {
+        _loggingService?.LogInfo("Analyzing merged ROM dependencies...");
+
+        await Task.Run(() =>
+        {
+            foreach (var rom in scannedRoms.Values)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Mark as merged ROMset
+                rom.IsMergedRomset = true;
+
+                if (rom.IsClone && rom.Metadata != null)
+                {
+                    // Get required parent ROMs
+                    var requiredParents = parentResolver.GetRequiredParents(rom.Name, metadataLookup);
+                    
+                    // Check which parents are available
+                    foreach (var parentName in requiredParents)
+                    {
+                        if (scannedRoms.ContainsKey(parentName))
+                        {
+                            rom.AvailableParentFiles.Add(parentName);
+                        }
+                        else
+                        {
+                            rom.MissingParentFiles.Add(parentName);
+                        }
+                    }
+
+                    // Set validation status
+                    if (rom.MissingParentFiles.Count == 0)
+                    {
+                        rom.ValidationStatus = MergedRomValidationStatus.Valid;
+                    }
+                    else
+                    {
+                        rom.ValidationStatus = MergedRomValidationStatus.MissingParentFiles;
+                    }
+                }
+                else if (rom.IsParentGame)
+                {
+                    // Get dependent clones
+                    rom.DependentClones = parentResolver.GetDependentClones(rom.Name, metadataLookup);
+                    rom.ValidationStatus = MergedRomValidationStatus.Valid; // Parents are always valid
+                }
+                else
+                {
+                    // Non-clone, non-parent ROMs
+                    rom.ValidationStatus = MergedRomValidationStatus.Valid;
+                }
+            }
+        }, cancellationToken);
+
+        _loggingService?.LogInfo($"Dependency analysis complete: {scannedRoms.Values.Count(r => r.IsClone)} clones analyzed");
+    }
+
+    /// <summary>
     /// Scans the ROM repository for available ROM files
     /// </summary>
     /// <param name="romRepositoryPath">Path to ROM repository</param>

@@ -174,6 +174,30 @@ namespace MameSelector.UI
             {
                 item.ForeColor = Color.Gray;
             }
+            else if (rom.IsMergedRomset)
+            {
+                // Merged ROMset color coding
+                if (rom.ValidationStatus == MergedRomValidationStatus.MissingParentFiles)
+                {
+                    item.ForeColor = Color.Red; // Missing parent files
+                }
+                else if (rom.ValidationStatus == MergedRomValidationStatus.InvalidChecksums)
+                {
+                    item.ForeColor = Color.Orange; // Invalid checksums
+                }
+                else if (rom.IsClone)
+                {
+                    item.ForeColor = Color.Blue; // Valid clone
+                }
+                else if (rom.IsParentGame)
+                {
+                    item.ForeColor = Color.Green; // Parent game
+                }
+                else
+                {
+                    item.ForeColor = Color.Black; // Regular ROM
+                }
+            }
             else if (rom.IsClone)
             {
                 item.ForeColor = Color.Blue;

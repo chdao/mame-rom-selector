@@ -23,6 +23,16 @@ public enum LogLevel
 }
 
 /// <summary>
+/// ROMset format types supported by the application
+/// </summary>
+public enum RomsetType
+{
+    NonMerged,      // Each ROM file contains all required files for that game
+    Merged,         // ROM files depend on parent ROMs (clones reference parents)
+    Split           // ROM files split across parent/child relationships
+}
+
+/// <summary>
 /// Application settings for the MAME ROM Selector
 /// </summary>
 public class AppSettings
@@ -42,6 +52,12 @@ public class AppSettings
     
     // Debug panel verbosity level
     public VerbosityLevel ConsoleVerbosity { get; set; } = VerbosityLevel.Normal; // Default to normal verbosity
+    
+    // ROMset format configuration
+    public RomsetType RomsetType { get; set; } = RomsetType.NonMerged; // Default to non-merged for backward compatibility
+    public bool AutoDetectRomsetType { get; set; } = true; // Automatically detect ROMset type during scanning
+    public bool AutoCopyDependencies { get; set; } = true; // Automatically copy parent ROMs when copying clones
+    public bool ValidateMergedIntegrity { get; set; } = true; // Validate CRC integrity across parent-child relationships
     
     // Window state persistence
     public int WindowWidth { get; set; } = 1600;

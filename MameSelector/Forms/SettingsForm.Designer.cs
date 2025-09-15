@@ -48,6 +48,12 @@ partial class SettingsForm
         checkBoxVerifyChecksums = new CheckBox();
         checkBoxPortableMode = new CheckBox();
         checkBoxShowDevices = new CheckBox();
+        groupBoxRomset = new GroupBox();
+        labelRomsetType = new Label();
+        comboBoxRomsetType = new ComboBox();
+        checkBoxAutoDetectRomset = new CheckBox();
+        checkBoxAutoCopyDependencies = new CheckBox();
+        checkBoxValidateMergedIntegrity = new CheckBox();
         labelVerbosity = new Label();
         comboBoxVerbosity = new ComboBox();
         buttonOK = new Button();
@@ -55,6 +61,7 @@ partial class SettingsForm
         
         groupBoxPaths.SuspendLayout();
         groupBoxOptions.SuspendLayout();
+        groupBoxRomset.SuspendLayout();
         SuspendLayout();
         
         // 
@@ -214,6 +221,75 @@ partial class SettingsForm
         groupBoxOptions.Text = "Copy Options";
         
         // 
+        // groupBoxRomset
+        // 
+        groupBoxRomset.Controls.Add(checkBoxValidateMergedIntegrity);
+        groupBoxRomset.Controls.Add(checkBoxAutoCopyDependencies);
+        groupBoxRomset.Controls.Add(checkBoxAutoDetectRomset);
+        groupBoxRomset.Controls.Add(comboBoxRomsetType);
+        groupBoxRomset.Controls.Add(labelRomsetType);
+        groupBoxRomset.Location = new Point(12, 354);
+        groupBoxRomset.Name = "groupBoxRomset";
+        groupBoxRomset.Size = new Size(560, 120);
+        groupBoxRomset.TabIndex = 2;
+        groupBoxRomset.TabStop = false;
+        groupBoxRomset.Text = "ROMset Configuration";
+        
+        // 
+        // labelRomsetType
+        // 
+        labelRomsetType.AutoSize = true;
+        labelRomsetType.Location = new Point(15, 25);
+        labelRomsetType.Name = "labelRomsetType";
+        labelRomsetType.Size = new Size(75, 15);
+        labelRomsetType.TabIndex = 0;
+        labelRomsetType.Text = "ROMset Type:";
+        
+        // 
+        // comboBoxRomsetType
+        // 
+        comboBoxRomsetType.DropDownStyle = ComboBoxStyle.DropDownList;
+        comboBoxRomsetType.FormattingEnabled = true;
+        comboBoxRomsetType.Items.AddRange(new object[] { "Non-Merged", "Merged", "Split" });
+        comboBoxRomsetType.Location = new Point(120, 22);
+        comboBoxRomsetType.Name = "comboBoxRomsetType";
+        comboBoxRomsetType.Size = new Size(150, 23);
+        comboBoxRomsetType.TabIndex = 1;
+        
+        // 
+        // checkBoxAutoDetectRomset
+        // 
+        checkBoxAutoDetectRomset.AutoSize = true;
+        checkBoxAutoDetectRomset.Location = new Point(15, 55);
+        checkBoxAutoDetectRomset.Name = "checkBoxAutoDetectRomset";
+        checkBoxAutoDetectRomset.Size = new Size(200, 19);
+        checkBoxAutoDetectRomset.TabIndex = 2;
+        checkBoxAutoDetectRomset.Text = "Auto-detect ROMset type";
+        checkBoxAutoDetectRomset.UseVisualStyleBackColor = true;
+        
+        // 
+        // checkBoxAutoCopyDependencies
+        // 
+        checkBoxAutoCopyDependencies.AutoSize = true;
+        checkBoxAutoCopyDependencies.Location = new Point(15, 80);
+        checkBoxAutoCopyDependencies.Name = "checkBoxAutoCopyDependencies";
+        checkBoxAutoCopyDependencies.Size = new Size(250, 19);
+        checkBoxAutoCopyDependencies.TabIndex = 3;
+        checkBoxAutoCopyDependencies.Text = "Auto-copy parent ROMs for clones";
+        checkBoxAutoCopyDependencies.UseVisualStyleBackColor = true;
+        
+        // 
+        // checkBoxValidateMergedIntegrity
+        // 
+        checkBoxValidateMergedIntegrity.AutoSize = true;
+        checkBoxValidateMergedIntegrity.Location = new Point(300, 55);
+        checkBoxValidateMergedIntegrity.Name = "checkBoxValidateMergedIntegrity";
+        checkBoxValidateMergedIntegrity.Size = new Size(200, 19);
+        checkBoxValidateMergedIntegrity.TabIndex = 4;
+        checkBoxValidateMergedIntegrity.Text = "Validate merged ROM integrity";
+        checkBoxValidateMergedIntegrity.UseVisualStyleBackColor = true;
+        
+        // 
         // checkBoxCopyBios
         // 
         checkBoxCopyBios.AutoSize = true;
@@ -327,9 +403,10 @@ partial class SettingsForm
         // 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(584, 381);
+        ClientSize = new Size(584, 500);
         Controls.Add(buttonCancel);
         Controls.Add(buttonOK);
+        Controls.Add(groupBoxRomset);
         Controls.Add(groupBoxOptions);
         Controls.Add(groupBoxPaths);
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -343,6 +420,8 @@ partial class SettingsForm
         groupBoxPaths.PerformLayout();
         groupBoxOptions.ResumeLayout(false);
         groupBoxOptions.PerformLayout();
+        groupBoxRomset.ResumeLayout(false);
+        groupBoxRomset.PerformLayout();
         ResumeLayout(false);
     }
 
@@ -368,6 +447,12 @@ partial class SettingsForm
     private CheckBox checkBoxVerifyChecksums;
     private CheckBox checkBoxPortableMode;
     private CheckBox checkBoxShowDevices;
+    private GroupBox groupBoxRomset;
+    private Label labelRomsetType;
+    private ComboBox comboBoxRomsetType;
+    private CheckBox checkBoxAutoDetectRomset;
+    private CheckBox checkBoxAutoCopyDependencies;
+    private CheckBox checkBoxValidateMergedIntegrity;
     private Label labelVerbosity;
     private ComboBox comboBoxVerbosity;
     private Button buttonOK;

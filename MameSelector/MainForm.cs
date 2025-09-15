@@ -167,9 +167,12 @@ public partial class MainForm : Form
         var metadataService = new RomMetadataService(xmlParser);
         var cacheService = new RomCacheService();
         var copyService = new RomCopyService(_loggingService);
+        var romsetDetector = new RomsetDetector(_loggingService);
+        var parentResolver = new ParentRomResolver(_loggingService);
+        var mergedValidator = new MergedRomValidator(_loggingService);
         
         // Initialize controller
-        _controller = new MainController(settingsManager, romScanner, metadataService, cacheService, xmlParser, copyService, _romListView, _loggingService);
+        _controller = new MainController(settingsManager, romScanner, metadataService, cacheService, xmlParser, copyService, _romListView, _loggingService, romsetDetector, parentResolver, mergedValidator);
         _controller.SetMainForm(this);
         _controller.SetDestinationListView(_destinationRomListView);
         
@@ -485,6 +488,28 @@ public partial class MainForm : Form
                        $"Matched: {stats.MatchedRoms:N0} ({stats.MatchPercentage:F1}%) | " +
                        $"CHD: {stats.RomsWithChd:N0} | " +
                        $"Clones: {stats.CloneRoms:N0}";
+        
+        // Add merged ROMset information if applicable
+        if (stats.RomsetType == RomsetType.Merged)
+        {
+            statsText += $" | ROMset: {stats.RomsetType} | " +
+                        $"Parents: {stats.ParentRoms:N0} | " +
+                        $"Valid Clones: {stats.ValidClones:N0}";
+            
+            if (stats.InvalidClones > 0)
+            {
+                statsText += $" | Invalid: {stats.InvalidClones:N0}";
+            }
+            
+            if (stats.MissingDependencies > 0)
+            {
+                statsText += $" | Missing Deps: {stats.MissingDependencies:N0}";
+            }
+        }
+        else if (stats.RomsetType == RomsetType.Split)
+        {
+            statsText += $" | ROMset: {stats.RomsetType}";
+        }
         
         // Update a stats label if you add one to the status bar
         statusLabel.Text = statsText;

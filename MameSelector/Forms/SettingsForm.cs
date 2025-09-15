@@ -21,7 +21,11 @@ public partial class SettingsForm : Form
             CreateSubfolders = settings.CreateSubfolders,
             VerifyChecksums = settings.VerifyChecksums,
             PortableMode = settings.PortableMode,
-            ConsoleVerbosity = settings.ConsoleVerbosity
+            ConsoleVerbosity = settings.ConsoleVerbosity,
+            RomsetType = settings.RomsetType,
+            AutoDetectRomsetType = settings.AutoDetectRomsetType,
+            AutoCopyDependencies = settings.AutoCopyDependencies,
+            ValidateMergedIntegrity = settings.ValidateMergedIntegrity
         };
 
         LoadSettingsToUI();
@@ -40,6 +44,10 @@ public partial class SettingsForm : Form
         checkBoxVerifyChecksums.Checked = Settings.VerifyChecksums;
         checkBoxPortableMode.Checked = Settings.PortableMode;
         comboBoxVerbosity.SelectedIndex = (int)Settings.ConsoleVerbosity;
+        comboBoxRomsetType.SelectedIndex = (int)Settings.RomsetType;
+        checkBoxAutoDetectRomset.Checked = Settings.AutoDetectRomsetType;
+        checkBoxAutoCopyDependencies.Checked = Settings.AutoCopyDependencies;
+        checkBoxValidateMergedIntegrity.Checked = Settings.ValidateMergedIntegrity;
     }
 
     private void SaveSettingsFromUI()
@@ -55,6 +63,10 @@ public partial class SettingsForm : Form
         Settings.VerifyChecksums = checkBoxVerifyChecksums.Checked;
         Settings.PortableMode = checkBoxPortableMode.Checked;
         Settings.ConsoleVerbosity = (VerbosityLevel)comboBoxVerbosity.SelectedIndex;
+        Settings.RomsetType = (RomsetType)comboBoxRomsetType.SelectedIndex;
+        Settings.AutoDetectRomsetType = checkBoxAutoDetectRomset.Checked;
+        Settings.AutoCopyDependencies = checkBoxAutoCopyDependencies.Checked;
+        Settings.ValidateMergedIntegrity = checkBoxValidateMergedIntegrity.Checked;
     }
 
     private void ButtonBrowseMameXml_Click(object sender, EventArgs e)

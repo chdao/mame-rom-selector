@@ -18,6 +18,12 @@ public class MameGame
     public List<DiskFile> DiskFiles { get; set; } = new();
     public bool HasCHD => DiskFiles.Any();
     
+    // Enhanced parent-child relationship support
+    public List<string> ChildClones { get; set; } = new(); // Games that clone this one
+    public MameGame? ParentGame { get; set; } // Reference to parent game (set during processing)
+    public List<string> RequiredParentFiles { get; set; } = new(); // Files needed from parent ROM
+    public bool IsParentGame => ChildClones.Any(); // True if this game has clones
+    
     /// <summary>
     /// Gets the total size of all ROM files in bytes
     /// </summary>

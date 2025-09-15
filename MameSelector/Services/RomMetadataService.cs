@@ -196,6 +196,20 @@ public class RomMetadataService
         var romsWithChd = scannedRoms.Values.Count(r => r.HasChd);
         var cloneRoms = scannedRoms.Values.Count(r => r.IsClone);
 
+        // Merged ROMset statistics
+        var mergedRoms = scannedRoms.Values.Count(r => r.IsMergedRomset);
+        var parentRoms = scannedRoms.Values.Count(r => r.IsParentGame);
+        var validClones = scannedRoms.Values.Count(r => r.IsClone && r.ValidationStatus == MergedRomValidationStatus.Valid);
+        var invalidClones = scannedRoms.Values.Count(r => r.IsClone && r.ValidationStatus != MergedRomValidationStatus.Valid);
+        var missingDependencies = scannedRoms.Values.Sum(r => r.MissingParentFiles.Count);
+
+        // Determine ROMset type
+        var romsetType = RomsetType.NonMerged;
+        if (mergedRoms > 0)
+        {
+            romsetType = RomsetType.Merged; // Default to merged if any merged ROMs found
+        }
+
         return new MetadataStats
         {
             TotalScannedRoms = totalRoms,
@@ -203,7 +217,15 @@ public class RomMetadataService
             UnmatchedRoms = totalRoms - matchedRoms,
             RomsWithChd = romsWithChd,
             CloneRoms = cloneRoms,
-            MatchPercentage = totalRoms > 0 ? (double)matchedRoms / totalRoms * 100 : 0
+            MatchPercentage = totalRoms > 0 ? (double)matchedRoms / totalRoms * 100 : 0,
+            
+            // Merged ROMset statistics
+            RomsetType = romsetType,
+            MergedRoms = mergedRoms,
+            ParentRoms = parentRoms,
+            ValidClones = validClones,
+            InvalidClones = invalidClones,
+            MissingDependencies = missingDependencies
         };
     }
 
@@ -237,4 +259,12 @@ public class MetadataStats
     public int RomsWithChd { get; set; }
     public int CloneRoms { get; set; }
     public double MatchPercentage { get; set; }
+    
+    // Merged ROMset statistics
+    public RomsetType RomsetType { get; set; } = RomsetType.NonMerged;
+    public int MergedRoms { get; set; }
+    public int ParentRoms { get; set; }
+    public int ValidClones { get; set; }
+    public int InvalidClones { get; set; }
+    public int MissingDependencies { get; set; }
 }

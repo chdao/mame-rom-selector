@@ -14,6 +14,374 @@ namespace MameSelector.Services
         {
             _loggingService = loggingService;
         }
+
+        /// <summary>
+        /// Reconstructs a merged ROM ZIP file with only the files needed for the selected ROM
+        /// </summary>
+        /// <param name="selectedRom">The ROM to reconstruct</param>
+        /// <param name="parentRoms">Available parent ROMs</param>
+        /// <param name="destinationPath">Destination directory path</param>
+        /// <param name="progress">Progress reporter</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if successful, false otherwise</returns>
+        private async Task<bool> ReconstructMergedRomAsync(
+            ScannedRom selectedRom,
+            Dictionary<string, ScannedRom> parentRoms,
+            string destinationPath,
+            IProgress<CopyProgress>? progress,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                _loggingService?.LogInfo($"Reconstructing merged ROM: {selectedRom.Name}");
+
+                // Get the ROM files needed for this specific ROM
+                var requiredFiles = await GetRequiredRomFilesAsync(selectedRom, parentRoms, cancellationToken);
+                
+                if (!requiredFiles.Any())
+                {
+                    _loggingService?.LogWarning($"No ROM files found for {selectedRom.Name}");
+                    return false;
+                }
+
+                // Create the destination ZIP file
+                var destinationZipPath = Path.Combine(destinationPath, $"{selectedRom.Name}.zip");
+                
+                // Remove existing file if it exists
+                if (File.Exists(destinationZipPath))
+                {
+                    File.Delete(destinationZipPath);
+                }
+
+                // Create the reconstructed ZIP
+                using (var archive = ZipFile.Open(destinationZipPath, ZipArchiveMode.Create))
+                {
+                    foreach (var fileInfo in requiredFiles)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        
+                        try
+                        {
+                            // Add the file to the ZIP archive
+                            var entry = archive.CreateEntry(fileInfo.FileName, CompressionLevel.Optimal);
+                            
+                            using (var entryStream = entry.Open())
+                            using (var sourceArchive = ZipFile.OpenRead(fileInfo.SourceZipPath))
+                            using (var sourceStream = sourceArchive.GetEntry(fileInfo.FileName)?.Open())
+                            {
+                                if (sourceStream != null)
+                                {
+                                    await sourceStream.CopyToAsync(entryStream, cancellationToken);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _loggingService?.LogError($"Error adding file {fileInfo.FileName} to reconstructed ZIP: {ex.Message}");
+                            return false;
+                        }
+                    }
+                }
+
+                _loggingService?.LogInfo($"Successfully reconstructed {selectedRom.Name}.zip with {requiredFiles.Count} files");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _loggingService?.LogError($"Error reconstructing merged ROM {selectedRom.Name}: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Gets the ROM files required for a specific ROM from merged ROMsets
+        /// </summary>
+        /// <param name="selectedRom">The ROM to get files for</param>
+        /// <param name="parentRoms">Available parent ROMs</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>List of required ROM files</returns>
+        private async Task<List<RequiredRomFile>> GetRequiredRomFilesAsync(
+            ScannedRom selectedRom,
+            Dictionary<string, ScannedRom> parentRoms,
+            CancellationToken cancellationToken)
+        {
+            var requiredFiles = new List<RequiredRomFile>();
+
+            await Task.Run(() =>
+            {
+                try
+                {
+                    // Get ROM files from the selected ROM's metadata
+                    if (selectedRom.Metadata?.RomFiles == null)
+                    {
+                        return;
+                    }
+
+                    foreach (var romFile in selectedRom.Metadata.RomFiles)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        // Try to find this file in the selected ROM's archive first
+                        var foundInSelected = false;
+                        if (!string.IsNullOrEmpty(selectedRom.RomFilePath) && File.Exists(selectedRom.RomFilePath))
+                        {
+                            using (var archive = ZipFile.OpenRead(selectedRom.RomFilePath))
+                            {
+                                var entry = archive.GetEntry(romFile.Name);
+                                if (entry != null)
+                                {
+                                    requiredFiles.Add(new RequiredRomFile
+                                    {
+                                        FileName = romFile.Name,
+                                        SourceZipPath = selectedRom.RomFilePath!,
+                                        SourceRomName = selectedRom.Name
+                                    });
+                                    foundInSelected = true;
+                                }
+                            }
+                        }
+
+                        // If not found in selected ROM, look in parent ROMs
+                        if (!foundInSelected)
+                        {
+                            foreach (var parentName in selectedRom.AvailableParentFiles)
+                            {
+                                if (parentRoms.TryGetValue(parentName, out var parentRom) &&
+                                    !string.IsNullOrEmpty(parentRom.RomFilePath) &&
+                                    File.Exists(parentRom.RomFilePath))
+                                {
+                                    using (var archive = ZipFile.OpenRead(parentRom.RomFilePath))
+                                    {
+                                        var entry = archive.GetEntry(romFile.Name);
+                                        if (entry != null)
+                                        {
+                                            requiredFiles.Add(new RequiredRomFile
+                                            {
+                                                FileName = romFile.Name,
+                                                SourceZipPath = parentRom.RomFilePath!,
+                                                SourceRomName = parentName
+                                            });
+                                            foundInSelected = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!foundInSelected)
+                        {
+                            _loggingService?.LogWarning($"Required file {romFile.Name} not found for ROM {selectedRom.Name}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _loggingService?.LogError($"Error getting required ROM files for {selectedRom.Name}: {ex.Message}");
+                }
+            }, cancellationToken);
+
+            return requiredFiles;
+        }
+
+        /// <summary>
+        /// Copies selected ROMs with merged ROMset dependency support
+        /// </summary>
+        /// <param name="selectedRoms">ROMs to copy</param>
+        /// <param name="destinationPath">Destination directory path</param>
+        /// <param name="romsetType">Type of ROMset being copied</param>
+        /// <param name="autoCopyDependencies">Whether to automatically copy parent ROMs</param>
+        /// <param name="parentResolver">Parent-child dependency resolver</param>
+        /// <param name="progress">Progress reporter</param>
+        /// <param name="romCopiedCallback">Callback for each ROM copied</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Copy result with statistics</returns>
+        public async Task<CopyResult> CopyMergedRomsAsync(
+            IEnumerable<ScannedRom> selectedRoms,
+            string destinationPath,
+            RomsetType romsetType,
+            bool autoCopyDependencies,
+            ParentRomResolver? parentResolver,
+            IProgress<CopyProgress>? progress = null,
+            Func<string, Task>? romCopiedCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrEmpty(destinationPath))
+                throw new ArgumentException("Destination path cannot be null or empty", nameof(destinationPath));
+
+            if (!Directory.Exists(destinationPath))
+                Directory.CreateDirectory(destinationPath);
+
+            var romsList = selectedRoms.ToList();
+            var totalRoms = romsList.Count;
+
+            // For merged ROMsets, expand the list to include dependencies
+            var romsToCopy = new List<ScannedRom>(romsList);
+            if (romsetType == RomsetType.Merged && autoCopyDependencies && parentResolver != null)
+            {
+                romsToCopy = await ExpandWithDependenciesAsync(romsList, parentResolver, cancellationToken);
+                _loggingService?.LogInfo($"Expanded ROM list from {totalRoms} to {romsToCopy.Count} ROMs (including dependencies)");
+            }
+
+            // Log the ROMs being copied
+            var romNames = string.Join(", ", romsToCopy.Select(r => r.Name));
+            _loggingService?.LogInfo($"Starting merged ROM copy operation for {romsToCopy.Count} ROM(s): {romNames}");
+
+            var result = new CopyResult();
+            var totalBytesToCopy = CalculateTotalBytesToCopy(romsToCopy);
+            var totalFilesToCopy = CalculateTotalFilesToCopy(romsToCopy);
+            var totalBytesCopied = 0L;
+            var filesCopied = 0;
+
+            // Initial progress report
+            progress?.Report(new CopyProgress
+            {
+                Phase = "Starting merged ROM copy operation...",
+                Percentage = 0,
+                RomsCopied = 0,
+                TotalRoms = romsToCopy.Count,
+                FilesCopied = 0,
+                TotalFiles = totalFilesToCopy,
+                TotalBytesCopied = 0,
+                TotalBytesToCopy = totalBytesToCopy
+            });
+
+            for (int i = 0; i < romsToCopy.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var rom = romsToCopy[i];
+                
+                try
+                {
+                    // For merged ROMsets, reconstruct the ZIP file instead of copying
+                    bool copySuccess;
+                    if (romsetType == RomsetType.Merged && rom.IsClone)
+                    {
+                        copySuccess = await ReconstructMergedRomAsync(rom, romsToCopy.ToDictionary(r => r.Name, r => r), destinationPath, progress, cancellationToken);
+                    }
+                    else
+                    {
+                        await CopyRomAsync(rom, destinationPath, progress, totalBytesToCopy, totalBytesCopied, cancellationToken);
+                        copySuccess = true;
+                    }
+                    
+                    if (copySuccess)
+                    {
+                        result.SuccessfulCopies++;
+                        filesCopied += (rom.HasRomFile ? 1 : 0) + rom.ChdFiles.Count;
+                        totalBytesCopied += rom.TotalSize;
+                    }
+                    else
+                    {
+                        result.FailedCopies++;
+                        result.FailedRoms.Add(new FailedCopy { RomName = rom.Name, Error = "Failed to reconstruct merged ROM" });
+                    }
+
+                    // Report progress after each ROM
+                    var phaseMessage = copySuccess ? 
+                        (romsetType == RomsetType.Merged && rom.IsClone ? $"Reconstructed {rom.Name}" : $"Completed {rom.Name}") :
+                        $"Failed {rom.Name}";
+                    
+                    progress?.Report(new CopyProgress
+                    {
+                        Phase = phaseMessage,
+                        Percentage = totalBytesToCopy > 0 ? (int)((double)totalBytesCopied / totalBytesToCopy * 100) : 0,
+                        RomsCopied = i + 1,
+                        TotalRoms = romsToCopy.Count,
+                        FilesCopied = filesCopied,
+                        TotalFiles = totalFilesToCopy,
+                        TotalBytesCopied = totalBytesCopied,
+                        TotalBytesToCopy = totalBytesToCopy
+                    });
+
+                    // Call the callback to notify that this ROM was copied
+                    if (romCopiedCallback != null)
+                    {
+                        await romCopiedCallback(rom.Name);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    result.FailedCopies++;
+                    result.FailedRoms.Add(new FailedCopy { RomName = rom.Name, Error = ex.Message });
+                    
+                    progress?.Report(new CopyProgress
+                    {
+                        Phase = $"Failed {rom.Name}",
+                        Percentage = totalBytesToCopy > 0 ? (int)((double)totalBytesCopied / totalBytesToCopy * 100) : 0,
+                        RomsCopied = i + 1,
+                        TotalRoms = romsToCopy.Count,
+                        FilesCopied = filesCopied,
+                        TotalFiles = totalFilesToCopy,
+                        TotalBytesCopied = totalBytesCopied,
+                        TotalBytesToCopy = totalBytesToCopy
+                    });
+                }
+            }
+
+            progress?.Report(new CopyProgress
+            {
+                Phase = "Merged ROM copy operation completed",
+                Percentage = 100,
+                RomsCopied = romsToCopy.Count,
+                TotalRoms = romsToCopy.Count,
+                FilesCopied = filesCopied,
+                TotalFiles = totalFilesToCopy,
+                TotalBytesCopied = totalBytesCopied,
+                TotalBytesToCopy = totalBytesToCopy
+            });
+
+            return result;
+        }
+
+        /// <summary>
+        /// Expands the ROM list to include all required dependencies
+        /// </summary>
+        private async Task<List<ScannedRom>> ExpandWithDependenciesAsync(
+            List<ScannedRom> selectedRoms,
+            ParentRomResolver parentResolver,
+            CancellationToken cancellationToken)
+        {
+            var expandedRoms = new List<ScannedRom>();
+            var processedRoms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            await Task.Run(() =>
+            {
+                foreach (var rom in selectedRoms)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    
+                    // Add the ROM itself
+                    if (!processedRoms.Contains(rom.Name))
+                    {
+                        expandedRoms.Add(rom);
+                        processedRoms.Add(rom.Name);
+                    }
+
+                    // If this is a clone, add its parents
+                    if (rom.IsClone)
+                    {
+                        foreach (var parentName in rom.AvailableParentFiles)
+                        {
+                            if (!processedRoms.Contains(parentName))
+                            {
+                                // Create a placeholder ScannedRom for the parent
+                                var parentRom = new ScannedRom
+                                {
+                                    Name = parentName,
+                                    IsSelected = false // Don't mark parents as selected
+                                };
+                                expandedRoms.Add(parentRom);
+                                processedRoms.Add(parentName);
+                            }
+                        }
+                    }
+                }
+            }, cancellationToken);
+
+            return expandedRoms;
+        }
         /// <summary>
         /// Copies selected ROMs to the destination directory
         /// </summary>
@@ -490,5 +858,15 @@ namespace MameSelector.Services
         public bool IsValid { get; set; }
         public List<string> Errors { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Represents a ROM file required for reconstruction
+    /// </summary>
+    public class RequiredRomFile
+    {
+        public string FileName { get; set; } = string.Empty;
+        public string SourceZipPath { get; set; } = string.Empty;
+        public string SourceRomName { get; set; } = string.Empty;
     }
 }
