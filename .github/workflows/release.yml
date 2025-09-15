@@ -55,23 +55,102 @@ jobs:
       if: steps.check_release.outputs.skip == 'false'
       id: release_notes
       run: |
-        # Get the last release tag
-        $lastTag = gh release list --limit 1 --json tagName | ConvertFrom-Json | Select-Object -First 1 -ExpandProperty tagName
-        if (-not $lastTag) {
-          $lastTag = "HEAD~10"  # If no previous release, get last 10 commits
+        # Set error action preference to continue on errors
+        $ErrorActionPreference = "Continue"
+        
+        # Get the last release tag with multiple fallback methods
+        $lastTag = $null
+        
+        # Method 1: Try using GitHub CLI to get the latest release
+        try {
+          $releaseData = gh release list --limit 1 --json tagName 2>$null | ConvertFrom-Json
+          if ($releaseData -and $releaseData.Count -gt 0) {
+            $lastTag = $releaseData[0].tagName
+            Write-Host "Found latest release tag via gh: $lastTag"
+          }
+        }
+        catch {
+          Write-Host "GitHub CLI method failed: $($_.Exception.Message)"
         }
         
-        # Generate changelog from commit messages
-        $commits = git log --pretty=format:"- %s" $lastTag..HEAD
-        if ($commits) {
-          $changelog = "## Changes in this release:`n`n$commits"
+        # Method 2: Try git describe if gh failed
+        if (-not $lastTag) {
+          try {
+            $lastTag = git describe --tags --abbrev=0 2>$null
+            if ($lastTag) {
+              Write-Host "Found tag via git describe: $lastTag"
+            }
+          }
+          catch {
+            Write-Host "git describe failed: $($_.Exception.Message)"
+          }
+        }
+        
+        # Method 3: Get all tags and find the latest one
+        if (-not $lastTag) {
+          try {
+            $allTags = git tag --list 2>$null
+            if ($allTags) {
+              # Filter for version tags and sort them
+              $versionTags = $allTags | Where-Object { $_ -match '^v?\d+\.\d+\.\d+' }
+              if ($versionTags) {
+                $lastTag = $versionTags | Sort-Object { [version]($_ -replace '^v', '') } | Select-Object -Last 1
+                Write-Host "Found latest version tag: $lastTag"
+              }
+            }
+          }
+          catch {
+            Write-Host "Getting tags failed: $($_.Exception.Message)"
+          }
+        }
+        
+        # Fallback if no tag found
+        if (-not $lastTag) {
+          Write-Host "No previous release found, using HEAD~10 as fallback"
+          $lastTag = "HEAD~10"
+        }
+        
+        # Generate changelog from commit messages with better error handling
+        $commits = @()
+        
+        try {
+          if ($lastTag -eq "HEAD~10") {
+            # Get last 10 commits
+            $commits = git log --pretty=format:"- %s" -10 2>$null
+            Write-Host "Getting last 10 commits"
+          } else {
+            # Get commits since the last tag
+            Write-Host "Getting commits since tag: $lastTag"
+            $commits = git log --pretty=format:"- %s" "$lastTag..HEAD" 2>$null
+            
+            # If that fails, try without the range
+            if (-not $commits) {
+              Write-Host "Range query failed, trying last 10 commits"
+              $commits = git log --pretty=format:"- %s" -10 2>$null
+            }
+          }
+        }
+        catch {
+          Write-Host "Error getting commits: $($_.Exception.Message)"
+          # Final fallback
+          $commits = git log --pretty=format:"- %s" -10 2>$null
+        }
+        
+        # Create changelog
+        if ($commits -and $commits.Count -gt 0) {
+          $changelog = "## Changes in this release:`n`n$($commits -join "`n")"
+          Write-Host "Generated changelog with $($commits.Count) commits"
         } else {
           $changelog = "## Changes in this release`n`n- Version update and improvements"
+          Write-Host "Using default changelog"
         }
         
-        echo "release_notes<<EOF" >> $env:GITHUB_OUTPUT
-        echo $changelog >> $env:GITHUB_OUTPUT
-        echo "EOF" >> $env:GITHUB_OUTPUT
+        # Output for GitHub Actions
+        Write-Host "release_notes<<EOF" >> $env:GITHUB_OUTPUT
+        Write-Host $changelog >> $env:GITHUB_OUTPUT
+        Write-Host "EOF" >> $env:GITHUB_OUTPUT
+        
+        Write-Host "Release notes generation completed successfully"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
